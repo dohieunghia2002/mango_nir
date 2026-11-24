@@ -11,7 +11,7 @@ from src.data import DATA_PATH, TARGET, set_masks, wavelength_columns, wavelengt
 from src.models_pls import fit_pls, predict, regression_metrics
 from src.preprocess import augment, preprocess, snv
 from src.step2_decision import evaluate
-from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, load_runs, missing_runs,
+from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, keras_comparison, load_runs, missing_runs,
                                 prediction_interval, regression_table, summarise_regression)
 from src.step3_train_nn import EXTRA_SEEDS, FEATURE_VERSION, RUNS, SEEDS, features, plan, run_paths, run_status, supersede
 
@@ -163,3 +163,22 @@ def test_benchmark_comparison_criteria():
     c = benchmark_comparison(reg)[0]
     assert c['rmsep_diff'] == pytest.approx(0.08) and not c['equivalent']  # mean too far from Walsh's single run
     assert c['within_pi']  # but Walsh's run is a plausible single draw
+
+
+def test_keras2_experiment_runs():
+    k2 = dict(RUNS['cnn_TA_cal_k2'])
+    assert k2.pop('keras') == 2 and k2 == RUNS['cnn_TA_cal']  # only the Keras version differs
+    assert plan(list(RUNS), keras=2) == [('cnn_TA_cal_k2', s) for s in range(10)]
+    k3 = plan(list(RUNS), keras=3)
+    assert all(r != 'cnn_TA_cal_k2' for r, _ in k3)
+    assert len(k3) == len(plan(list(RUNS))) - 10
+    assert plan(list(RUNS), smoke=True, keras=2) == [('cnn_TA_cal_k2', 0)]
+
+
+def test_keras_comparison():
+    reg = pd.DataFrame({'run': ['cnn_TA_cal_k2'] * 3 + ['cnn_TA_cal'] * 4, 'set': 'Val Ext',
+                        'seed': [0, 1, 2, 0, 1, 2, 3], 'rmsep': [0.80, 0.82, 0.84, 0.88, 0.90, 0.92, 0.94], 'bias': 0.0})
+    k = keras_comparison(reg)
+    assert len(k) == 1 and k[0]['set'] == 'Val Ext' and (k[0]['n_keras2'], k[0]['n_keras3']) == (3, 4)
+    assert k[0]['diff_keras2_minus_keras3'] == pytest.approx(0.82 - 0.91)
+    assert k[0]['welch_p'] < 0.05

@@ -32,7 +32,7 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
 
   Các tỉ lệ có hiệu chỉnh lô là trung bình gộp của 30 lần rút ngẫu nhiên. Độ lệch chuẩn giữa các lần lặp nằm trong `results/step2_decision_metrics.csv`. Ví dụ, mùa vụ 5 với k = 5 có tỉ lệ tự quyết 53,1% ± 6,0%.
 - Chưa làm: chọn ngưỡng defer tối ưu theo chi phí (mô-đun M4). Phần này cần các giá trị chi phí có nguồn trích dẫn.
-- **Bước 3 (ANN và 1D-CNN): đã chạy lần 1 trên Colab ngày 24/11/2026 (30 mô hình, commit `b59b16d`); đang chờ chạy lần 2.** Có 6 cấu hình theo thiết lập của Walsh 2024, mỗi cấu hình 5 seed; `cnn_TA_cal` có thêm 15 seed (5–19). Các mốc so sánh với mùa vụ 4, lấy từ Phụ lục A của Walsh 2024 (Mendeley Data doi:10.17632/mc9jshwb38.1, `appendix_a_model_results.xlsx`), bias đã đổi sang quy ước dự đoán − thật:
+- **Bước 3 (ANN và 1D-CNN): đã chạy lần 1 (30 mô hình, commit `b59b16d`) và lần 2 (15 mô hình AT chạy lại, 15 seed thêm cho `cnn_TA_cal`, commit `f99661b`) trên Colab ngày 24/11/2026; thí nghiệm Keras 2 (`cnn_TA_cal_k2`) chưa chạy.** Có 6 cấu hình theo thiết lập của Walsh 2024, mỗi cấu hình 5 seed; `cnn_TA_cal` có thêm 15 seed (5–19). Ở lần 2, seed 16–19 của `cnn_TA_cal` chạy trên CPU (một phiên Colab không có GPU); RMSEP mùa vụ 4 của chúng không khác các seed chạy GPU (Welch p = 0,88). Các mốc so sánh với mùa vụ 4, lấy từ Phụ lục A của Walsh 2024 (Mendeley Data doi:10.17632/mc9jshwb38.1, `appendix_a_model_results.xlsx`), bias đã đổi sang quy ước dự đoán − thật:
 
 | Cấu hình | Mô tả | Mốc (Walsh 2024, cùng cách chia tập) |
 |---|---|---|
@@ -60,7 +60,8 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
   Phân tích (`src/step3_analysis.py`) chỉ dùng dự đoán có phiên bản đặc trưng hiện hành, ghi `complete`, `missing_runs` và `excluded_older_features` vào `results/step3.json`, và trả mã lỗi nếu còn thiếu mô hình. Trong notebook, script huấn luyện và phân tích được gọi qua `run_module`, nên khi một script dừng vì hết giờ hoặc vì thiếu mô hình, notebook dừng lại và không đóng gói kết quả chưa đầy đủ.
 
   CLAUDE.md yêu cầu tiền xử lý trên runtime CPU. Notebook chưa làm vậy: đặc trưng được tính ngay trong phiên GPU, vì chỉ mất vài giây.
-- Bước tiếp theo: chạy lại notebook Bước 3 trên Colab (lần 2: 15 mô hình AT và 15 seed thêm cho `cnn_TA_cal`), rồi phân tích kết quả.
+  **Thí nghiệm Keras 2.** Ở lần chạy 2, mô hình đơn lẻ của Walsh tốt hơn mọi seed của đề tài ở mùa vụ 4 với cả ba cấu hình CNN (`cnn_TA_cal` 0/20 seed tốt hơn C028, `cnn_AT_cal` 0/5 so với C030, `cnn_AT_all` 0/5 so với C006), dù trên tập Tuning giá trị của Walsh nằm trong khoảng các seed. Dữ liệu, tiền xử lý, kiến trúc và thiết lập huấn luyện đã đối chiếu là giống; khác biệt còn lại lớn nhất là Walsh dùng TensorFlow 2.11 (Keras 2), đề tài dùng TensorFlow 2.21 (Keras 3). Cấu hình `cnn_TA_cal_k2` giống hệt `cnn_TA_cal` nhưng huấn luyện bằng Keras 2 (gói `tf-keras` 2.21.0 trên cùng TensorFlow 2.21, chọn qua `TF_USE_LEGACY_KERAS`), 10 seed; phân tích so sánh hai phiên bản Keras bằng Welch t-test (`keras_comparison` trong `results/step3.json`).
+- Bước tiếp theo: chạy notebook Bước 3 trên Colab (mục 6b: thí nghiệm Keras 2; các mô hình đã xong được bỏ qua), rồi phân tích kết quả.
 
 ## Cách chạy
 

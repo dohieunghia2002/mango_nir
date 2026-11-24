@@ -39,7 +39,11 @@ BENCHMARKS = {
     'cnn_TA_cal': {'source': 'Walsh 2024, Appendix A, C028 (also Table 5)', 'rmsep': 0.824, 'bias': 0.006},
     'cnn_AT_cal': {'source': 'Walsh 2024, Appendix A, C030', 'rmsep': 0.814, 'bias': 0.067},
     'cnn_AT_all': {'source': 'Walsh 2024, Appendix A, C006', 'rmsep': 0.827, 'bias': -0.027},
+    'cnn_TA_cal_k2': {'source': 'Walsh 2024, Appendix A, C028 (our run with Keras 2)', 'rmsep': 0.824, 'bias': 0.006},
 }
+# Same configuration trained with Keras 2 (tf_keras) and Keras 3: tests whether the Keras version explains the gap
+# between our CNN runs and Walsh's (TF 2.11, Keras 2).
+KERAS_PAIRS = {'cnn_TA_cal_k2': 'cnn_TA_cal'}
 REFERENCE_NOTE = ('Not comparable, reference only: Walsh 2024 best models used the extra outlier removal of Mishra & Passos '
                   '2021 and/or their random sample partition. CNN C134: season 4 RMSEP 0.77, season 5 RMSEP 1.18 '
                   '(bias -0.16 in our convention); ANN A010: 0.88 and 2.62; PLS P076: 1.00 and 1.87.')
@@ -126,6 +130,24 @@ def benchmark_comparison(reg):
     return out
 
 
+def keras_comparison(reg):
+    """RMSEP of each KERAS_PAIRS configuration with Keras 2 vs Keras 3, per set: means, SDs and Welch's t-test.
+    Seeds are not paired: the two Keras versions draw different random numbers from the same seed."""
+    out = []
+    for k2, k3 in KERAS_PAIRS.items():
+        for s in EVAL_SETS:
+            a = reg[(reg['run'] == k2) & (reg['set'] == s)]['rmsep'].to_numpy()
+            b = reg[(reg['run'] == k3) & (reg['set'] == s)]['rmsep'].to_numpy()
+            if a.size < 2 or b.size < 2:
+                continue
+            out.append({'run_keras2': k2, 'run_keras3': k3, 'set': s, 'n_keras2': int(a.size), 'n_keras3': int(b.size),
+                        'rmsep_mean_keras2': float(a.mean()), 'rmsep_sd_keras2': float(a.std(ddof=1)),
+                        'rmsep_mean_keras3': float(b.mean()), 'rmsep_sd_keras3': float(b.std(ddof=1)),
+                        'diff_keras2_minus_keras3': float(a.mean() - b.mean()),
+                        'welch_p': float(stats.ttest_ind(a, b, equal_var=False).pvalue)})
+    return out
+
+
 def decision_table(df, seeds):
     rows = []
     for seed, pred in sorted(seeds.items()):
@@ -170,6 +192,14 @@ def main():
         print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} ({c["n_seeds"]} seeds) vs {c["rmsep"]:.3f} ({c["source"]}), '
               f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | {pi}')
     print(f'  {REFERENCE_NOTE}')
+    keras = keras_comparison(reg)
+    if keras:
+        print('\nKeras 2 (tf_keras) vs Keras 3, same configuration, RMSEP mean (SD), Welch t-test:')
+        for k in keras:
+            print(f'  {k["run_keras2"]} vs {k["run_keras3"]:<11} {k["set"]:<10} '
+                  f'{k["rmsep_mean_keras2"]:.3f} ({k["rmsep_sd_keras2"]:.3f}, n={k["n_keras2"]}) vs '
+                  f'{k["rmsep_mean_keras3"]:.3f} ({k["rmsep_sd_keras3"]:.3f}, n={k["n_keras3"]}) | '
+                  f'diff {k["diff_keras2_minus_keras3"]:+.3f}, p = {k["welch_p"]:.3f}')
 
     decision = None
     if DECISION_RUN in runs:
@@ -188,7 +218,7 @@ def main():
     detail = {'complete': not missing, 'missing_runs': missing, 'excluded_older_features': excluded,
               'runs': {run: sorted(seeds) for run, seeds in runs.items()}, 'equivalent_tolerance': EQUIVALENT_TOL,
               'prediction_interval_level': PI_LEVEL,
-              'regression_summary': records(summary), 'benchmark_comparison': comparison,
+              'regression_summary': records(summary), 'benchmark_comparison': comparison, 'keras_comparison': keras,
               'reference_note': REFERENCE_NOTE, 'decision_run': DECISION_RUN,
               'decision_summary': None if decision is None else records(decision)}
     # allow_nan=False: a NaN left anywhere fails here instead of writing invalid JSON
@@ -199,7 +229,7 @@ def main():
         'description': 'ANN and 1D-CNN (Walsh 2024 settings) on the fixed Set partition; spectrum-level RMSEP over seeds; '
                        f'decision layer of Step 2 with {DECISION_RUN} (Tuning set unused in training)',
         **{k: detail[k] for k in ('complete', 'missing_runs', 'runs', 'regression_summary', 'benchmark_comparison',
-                                  'decision_summary')},
+                                  'keras_comparison', 'decision_summary')},
     }
     # the step3 entry was checked for NaN with step3.json above; other steps are written as they were read
     summary_path.write_text(json.dumps(all_summary, indent=2), encoding='utf-8')

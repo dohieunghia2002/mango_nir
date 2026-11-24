@@ -5,13 +5,16 @@ after a Colab disconnect; a finished run whose features have since changed (olde
 <out>/superseded/v<version>/ and trained again. Seeds form the outer loop, so a partial run still has every
 configuration for the first seeds. No new run starts after --time-budget-hours, to stay inside a free Colab GPU session;
 the script then exits with code 3, so the notebook stops before analysing an incomplete set of runs.
+One process trains with one Keras major version (--keras): only the runs configured for it are trained.
 
-  python -m src.step3_train_nn --out <dir>                      # all runs: SEEDS, then EXTRA_SEEDS
+  python -m src.step3_train_nn --out <dir>                      # all Keras 3 runs: SEEDS, then EXTRA_SEEDS
+  python -m src.step3_train_nn --out <dir> --keras 2            # the Keras 2 runs (needs: pip install tf-keras)
   python -m src.step3_train_nn --out <dir> --runs cnn_TA_cal --seeds 5 6   # only these runs and seeds
   python -m src.step3_train_nn --out <dir> --smoke              # 2 epochs on 1,000 spectra, seed 0
 """
 import argparse
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -31,7 +34,8 @@ DEFAULT_OUT = ROOT / 'results' / 'step3'
 SEEDS = (0, 1, 2, 3, 4)
 # Extra seeds run after the main grid: Walsh's results are single runs, so the seed spread of this configuration
 # is estimated more precisely to judge the gap to Walsh's C028.
-EXTRA_SEEDS = {'cnn_TA_cal': tuple(range(5, 20))}
+EXTRA_SEEDS = {'cnn_TA_cal': tuple(range(5, 20)), 'cnn_TA_cal_k2': tuple(range(5, 10))}
+DEFAULT_KERAS = 3
 # Free Colab GPU sessions last about 5 h. The budget counts from the start of this script and is checked before each
 # run, so a run that has started finishes: CNN runs took 1-5 min in the first Colab run, but an ANN run may last up to
 # about 1 h (10,000 epochs at about 0.35 s per epoch).
@@ -51,6 +55,9 @@ RUNS = {
     'cnn_AT_all': dict(model='cnn', pretreatment='AT', train='cal+tuning', monitor='loss', scaler_fit='cal+tuning'),
     # Decision layer: the Tuning set is not used at all (scaler, early stopping), so it can calibrate the conformal interval.
     'cnn_AT_calonly': dict(model='cnn', pretreatment='AT', train='cal', monitor='loss', scaler_fit='cal'),
+    # Experiment: cnn_TA_cal trained with Keras 2 (tf_keras on the same TensorFlow) instead of Keras 3. Walsh used
+    # TF 2.11 (Keras 2); all three CNN configurations of run 2 were worse on season 4 than Walsh's single runs.
+    'cnn_TA_cal_k2': dict(model='cnn', pretreatment='TA', train='cal', monitor='tuning', scaler_fit='cal+tuning', keras=2),
 }
 # Bumped when a pretreatment's features change; runs saved without a version have version 1.
 # AT v2: SNV statistics over 402-1098 nm with ddof=1 (v1: full spectrum, ddof=0).
@@ -90,8 +97,15 @@ def supersede(out, name, seed):
     return old
 
 
-def plan(runs, seeds=None, smoke=False):
-    """(run, seed) pairs in training order: seeds outer, then the extra seeds unless seeds are given explicitly."""
+def keras_major(run):
+    return RUNS[run].get('keras', DEFAULT_KERAS)
+
+
+def plan(runs, seeds=None, smoke=False, keras=None):
+    """(run, seed) pairs in training order: seeds outer, then the extra seeds unless seeds are given explicitly.
+    keras: keep only the runs configured for this Keras major version (None keeps all)."""
+    if keras is not None:
+        runs = [r for r in runs if keras_major(r) == keras]
     if smoke:
         return [(r, 0) for r in runs]
     pairs = [(r, s) for s in (seeds or SEEDS) for r in runs]
@@ -115,6 +129,9 @@ def environment():
 
 
 def run_one(name, cfg, seed, X, df, masks, out, env, smoke=False):
+    loaded = int(str(env['keras']).split('.')[0])
+    if loaded != cfg.get('keras', DEFAULT_KERAS):
+        raise RuntimeError(f'{name} needs Keras {cfg.get("keras", DEFAULT_KERAS)}, but Keras {env["keras"]} is loaded')
     version = FEATURE_VERSION[cfg['pretreatment']]
     status = run_status(out, name, seed, version)
     if status == 'done':
@@ -159,20 +176,30 @@ def main():
     ap.add_argument('--smoke', action='store_true', help='2 epochs on 1,000 spectra, seed 0 only: checks the code path')
     ap.add_argument('--time-budget-hours', type=float, default=TIME_BUDGET_HOURS,
                     help='no new run starts after this many hours; rerun the script in a new session to continue')
+    ap.add_argument('--keras', type=int, choices=(2, 3), default=DEFAULT_KERAS,
+                    help='Keras major version: 3 = bundled with TensorFlow; 2 = tf_keras (pip install tf-keras), '
+                         'selected through TF_USE_LEGACY_KERAS. Only the runs configured for it are trained.')
     args = ap.parse_args()
     t0 = time.time()
+    todo = plan(args.runs, args.seeds, args.smoke, keras=args.keras)
+    if not todo:
+        raise SystemExit(f'none of the selected runs is configured for Keras {args.keras}')
 
+    if args.keras == 2:
+        os.environ['TF_USE_LEGACY_KERAS'] = '1'  # must be set before TensorFlow is imported
     import tensorflow as tf
     tf.config.experimental.enable_op_determinism()
     env = environment()
     print(json.dumps(env))
+    if int(str(env['keras']).split('.')[0]) != args.keras:
+        raise SystemExit(f'Keras {args.keras} requested, but tf.keras is Keras {env["keras"]}')
 
     df = load_data()
     masks = set_masks(df)
     raw, wl = df[wavelength_columns(df)].to_numpy(), wavelengths(df)
-    X = {p: features(raw, wl, p) for p in sorted({RUNS[r]['pretreatment'] for r in args.runs})}
+    X = {p: features(raw, wl, p) for p in sorted({RUNS[r]['pretreatment'] for r, _ in todo})}
     print({p: x.shape for p, x in X.items()})
-    for name, seed in plan(args.runs, args.seeds, args.smoke):
+    for name, seed in todo:
         if (time.time() - t0) / 3600 > args.time_budget_hours:
             print(f'Time budget of {args.time_budget_hours} h reached: stopping before {name} seed {seed}. '
                   'Run the notebook again in a new session to continue; finished runs are skipped.', flush=True)
