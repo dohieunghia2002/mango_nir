@@ -1,6 +1,8 @@
 """Step 3 code that runs without TensorFlow: pretreatments, run configurations and the analysis of saved predictions.
 The analysis is exercised with PLS predictions standing in for network outputs."""
 import json
+import sys
+import types
 
 import numpy as np
 import pandas as pd
@@ -11,9 +13,10 @@ from src.data import DATA_PATH, TARGET, set_masks, wavelength_columns, wavelengt
 from src.models_pls import fit_pls, predict, regression_metrics
 from src.preprocess import augment, preprocess, snv
 from src.step2_decision import evaluate
-from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, keras_comparison, load_runs, missing_runs,
-                                prediction_interval, regression_table, summarise_regression)
-from src.step3_train_nn import EXTRA_SEEDS, FEATURE_VERSION, RUNS, SEEDS, features, plan, run_paths, run_status, supersede
+from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, device_comparison, keras_comparison,
+                                load_runs, missing_runs, prediction_interval, regression_table, summarise_regression)
+from src.step3_train_nn import (EXTRA_SEEDS, FEATURE_VERSION, RUNS, SEEDS, features, keras_info, keras_major_loaded, plan,
+                                run_paths, run_status, supersede)
 
 
 def spectra(df, n=None):
@@ -182,3 +185,40 @@ def test_keras_comparison():
     assert len(k) == 1 and k[0]['set'] == 'Val Ext' and (k[0]['n_keras2'], k[0]['n_keras3']) == (3, 4)
     assert k[0]['diff_keras2_minus_keras3'] == pytest.approx(0.82 - 0.91)
     assert k[0]['welch_p'] < 0.05
+
+
+@pytest.mark.parametrize('package, version, module, major', [
+    ('tf_keras', '2.21.0', 'tf_keras.src.engine.sequential', 2),  # TF_USE_LEGACY_KERAS=1: tf.keras has no __version__
+    ('keras', '3.13.2', 'keras.src.models.sequential', 3)])
+def test_keras_info_reads_the_package_behind_tf_keras(monkeypatch, package, version, module, major):
+    fake = types.ModuleType(package)
+    fake.__version__ = version
+    monkeypatch.setitem(sys.modules, package, fake)
+    Sequential = type('Sequential', (), {'__module__': module})
+    api = types.SimpleNamespace(Sequential=Sequential)  # stands in for tf.keras, without __version__
+    assert keras_info(api) == (package, version)
+    assert keras_major_loaded({'keras': version, 'keras_package': package}) == major
+    with pytest.raises(RuntimeError):
+        keras_major_loaded({'keras': None, 'keras_package': package})
+
+
+def test_device_comparison_and_seeds_better():
+    reg = pd.DataFrame({'run': 'cnn_TA_cal', 'set': 'Val Ext', 'seed': range(5),
+                        'rmsep': [0.80, 0.90, 0.92, 0.85, 0.87], 'bias': 0.0})
+    d = device_comparison(reg, {('cnn_TA_cal', s): ('cpu' if s >= 3 else 'gpu') for s in range(5)})
+    assert len(d) == 1 and (d[0]['n_cpu'], d[0]['n_gpu']) == (2, 3)
+    assert d[0]['rmsep_mean_cpu'] == pytest.approx(0.86) and d[0]['rmsep_mean_gpu'] == pytest.approx((0.80 + 0.90 + 0.92) / 3)
+    assert device_comparison(reg, {('cnn_TA_cal', s): 'gpu' for s in range(5)}) == []  # one device only
+    c = benchmark_comparison(reg)[0]
+    assert c['n_seeds_better_than_benchmark'] == 1  # only 0.80 is below Walsh's 0.824
+
+
+def test_superseded_runs_are_read_without_version_check(tmp_path):
+    pred, meta = run_paths(tmp_path, 'cnn_AT_cal', 0)
+    pred.parent.mkdir(parents=True)
+    meta.parent.mkdir(parents=True)
+    pd.DataFrame({'row': [0, 1], 'pred': [15.0, 16.0]}).to_csv(pred, index=False)
+    meta.write_text('{}')  # version 1: stale for the current AT features
+    assert load_runs(tmp_path, 2) == ({}, ['cnn_AT_cal_seed0'])
+    runs, excluded = load_runs(tmp_path, 2, check_version=False)
+    assert sorted(runs['cnn_AT_cal']) == [0] and excluded == []

@@ -13,6 +13,7 @@ One process trains with one Keras major version (--keras): only the runs configu
   python -m src.step3_train_nn --out <dir> --smoke              # 2 epochs on 1,000 spectra, seed 0
 """
 import argparse
+import importlib
 import json
 import os
 import platform
@@ -121,16 +122,31 @@ def git_commit():
         return None
 
 
+def keras_info(tf_keras_api):
+    """(package, version) of the Keras implementation behind tf.keras: ('keras', '3.x') for Keras 3, ('tf_keras', '2.x')
+    for Keras 2 selected with TF_USE_LEGACY_KERAS. tf.keras has no __version__ in the latter case, so the package is
+    read from the module of its Sequential class."""
+    package = tf_keras_api.Sequential.__module__.split('.')[0]
+    return package, getattr(importlib.import_module(package), '__version__', None)
+
+
+def keras_major_loaded(env):
+    v = env.get('keras')
+    if not v:
+        raise RuntimeError(f'Keras version not found (package {env.get("keras_package")})')
+    return int(str(v).split('.')[0])
+
+
 def environment():
     import tensorflow as tf
-    return {'python': platform.python_version(), 'tensorflow': tf.__version__, 'keras': getattr(tf.keras, '__version__', None),
+    package, version = keras_info(tf.keras)
+    return {'python': platform.python_version(), 'tensorflow': tf.__version__, 'keras': version, 'keras_package': package,
             'numpy': np.__version__, 'pandas': pd.__version__, 'gpu': [d.name for d in tf.config.list_physical_devices('GPU')],
             'git_commit': git_commit()}
 
 
 def run_one(name, cfg, seed, X, df, masks, out, env, smoke=False):
-    loaded = int(str(env['keras']).split('.')[0])
-    if loaded != cfg.get('keras', DEFAULT_KERAS):
+    if keras_major_loaded(env) != cfg.get('keras', DEFAULT_KERAS):
         raise RuntimeError(f'{name} needs Keras {cfg.get("keras", DEFAULT_KERAS)}, but Keras {env["keras"]} is loaded')
     version = FEATURE_VERSION[cfg['pretreatment']]
     status = run_status(out, name, seed, version)
@@ -191,8 +207,8 @@ def main():
     tf.config.experimental.enable_op_determinism()
     env = environment()
     print(json.dumps(env))
-    if int(str(env['keras']).split('.')[0]) != args.keras:
-        raise SystemExit(f'Keras {args.keras} requested, but tf.keras is Keras {env["keras"]}')
+    if keras_major_loaded(env) != args.keras:
+        raise SystemExit(f'Keras {args.keras} requested, but tf.keras is {env["keras_package"]} {env["keras"]}')
 
     df = load_data()
     masks = set_masks(df)

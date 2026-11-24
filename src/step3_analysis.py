@@ -56,17 +56,18 @@ def records(table):
     return table.astype(object).where(table.notna(), None).to_dict('records')
 
 
-def load_runs(runs_dir, n_rows):
+def load_runs(runs_dir, n_rows, check_version=True):
     """({run: {seed: per-spectrum predictions}}, excluded) from <runs_dir>/preds/<run>_seed<k>.csv.
     Predictions of a configuration in RUNS made with an older feature version (step3_train_nn.FEATURE_VERSION, read
     from runs/<run>_seed<k>.json) are left out and listed in `excluded`, so a partly re-run set of runs never mixes
-    old and new features."""
+    old and new features. check_version=False reads every file (used for the superseded runs)."""
     runs_dir = Path(runs_dir)
     runs, excluded = {}, []
     for f in sorted((runs_dir / 'preds').glob('*_seed*.csv')):
         run, seed = f.stem.rsplit('_seed', 1)
         seed = int(seed)
-        if run in RUNS and run_status(runs_dir, run, seed, FEATURE_VERSION[RUNS[run]['pretreatment']]) == 'stale':
+        if (check_version and run in RUNS
+                and run_status(runs_dir, run, seed, FEATURE_VERSION[RUNS[run]['pretreatment']]) == 'stale'):
             excluded.append(f.stem)
             continue
         p = pd.read_csv(f)
@@ -85,6 +86,29 @@ def missing_runs(runs):
 
 def finite_or_none(x):
     return float(x) if np.isfinite(x) else None
+
+
+def run_devices(runs_dir):
+    """{(run, seed): 'gpu' or 'cpu'} from the environment recorded in <runs_dir>/runs/<run>_seed<k>.json."""
+    out = {}
+    for f in (Path(runs_dir) / 'runs').glob('*_seed*.json'):
+        m = json.loads(f.read_text(encoding='utf-8'))
+        out[(m['run'], int(m['seed']))] = 'gpu' if m['environment'].get('gpu') else 'cpu'
+    return out
+
+
+def device_comparison(reg, devices):
+    """For configurations trained partly on GPU and partly on CPU (a Colab session without GPU): RMSEP per device
+    and Welch's t-test, per set. Needs at least 2 seeds on each device."""
+    d = reg.assign(device=[devices.get((r, s)) for r, s in zip(reg['run'], reg['seed'])])
+    out = []
+    for (run, s), g in d.groupby(['run', 'set'], sort=False):
+        cpu, gpu = g.loc[g['device'] == 'cpu', 'rmsep'], g.loc[g['device'] == 'gpu', 'rmsep']
+        if len(cpu) >= 2 and len(gpu) >= 2:
+            out.append({'run': run, 'set': s, 'n_cpu': int(len(cpu)), 'n_gpu': int(len(gpu)),
+                        'rmsep_mean_cpu': float(cpu.mean()), 'rmsep_mean_gpu': float(gpu.mean()),
+                        'welch_p': float(stats.ttest_ind(cpu, gpu, equal_var=False).pvalue)})
+    return out
 
 
 def regression_table(df, runs):
@@ -124,7 +148,8 @@ def benchmark_comparison(reg):
         lo, hi = prediction_interval(v['rmsep'])
         has_pi = bool(np.isfinite(lo))  # needs at least 2 seeds
         out.append({'run': run, **b, 'rmsep_mean': float(v['rmsep'].mean()), 'rmsep_sd': finite_or_none(v['rmsep'].std()),
-                    'bias_mean': float(v['bias'].mean()), 'n_seeds': int(v['seed'].nunique()), 'rmsep_diff': diff,
+                    'bias_mean': float(v['bias'].mean()), 'n_seeds': int(v['seed'].nunique()),
+                    'n_seeds_better_than_benchmark': int((v['rmsep'] < b['rmsep']).sum()), 'rmsep_diff': diff,
                     'equivalent': bool(abs(diff) <= EQUIVALENT_TOL), 'pi_low': finite_or_none(lo),
                     'pi_high': finite_or_none(hi), 'within_pi': bool(lo <= b['rmsep'] <= hi) if has_pi else None})
     return out
@@ -162,6 +187,22 @@ def summarise_decision(dec):
     return pd.concat([mean, sd], axis=1).reset_index().assign(n_seeds=dec['seed'].nunique())
 
 
+def superseded_analysis(df, runs_dir):
+    """Runs replaced after a change of features (<runs_dir>/superseded/v<k>/), kept as a sensitivity analysis:
+    {'v<k>': {'runs', 'regression_summary', 'decision_summary'}}; the decision layer uses DECISION_RUN if present."""
+    out = {}
+    for d in sorted((Path(runs_dir) / 'superseded').glob('v*')):
+        runs, _ = load_runs(d, len(df), check_version=False)
+        if not runs:
+            continue
+        decision = (records(summarise_decision(decision_table(df, runs[DECISION_RUN])))
+                    if DECISION_RUN in runs else None)
+        out[d.name] = {'runs': {r: sorted(s) for r, s in runs.items()},
+                       'regression_summary': records(summarise_regression(regression_table(df, runs))),
+                       'decision_summary': decision}
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs-dir', type=Path, default=RESULTS / 'step3')
@@ -190,7 +231,8 @@ def main():
         pi = ('PI needs 2 seeds' if c['within_pi'] is None else
               f'PI [{c["pi_low"]:.3f}, {c["pi_high"]:.3f}] -> {"TRONG" if c["within_pi"] else "NGOÀI"}')
         print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} ({c["n_seeds"]} seeds) vs {c["rmsep"]:.3f} ({c["source"]}), '
-              f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | {pi}')
+              f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | {pi} | '
+              f'seeds better than Walsh: {c["n_seeds_better_than_benchmark"]}/{c["n_seeds"]}')
     print(f'  {REFERENCE_NOTE}')
     keras = keras_comparison(reg)
     if keras:
@@ -200,6 +242,18 @@ def main():
                   f'{k["rmsep_mean_keras2"]:.3f} ({k["rmsep_sd_keras2"]:.3f}, n={k["n_keras2"]}) vs '
                   f'{k["rmsep_mean_keras3"]:.3f} ({k["rmsep_sd_keras3"]:.3f}, n={k["n_keras3"]}) | '
                   f'diff {k["diff_keras2_minus_keras3"]:+.3f}, p = {k["welch_p"]:.3f}')
+    devices = device_comparison(reg, run_devices(args.runs_dir))
+    if devices:
+        print('\nConfigurations trained partly on CPU, RMSEP mean CPU vs GPU, Welch t-test:')
+        for d in devices:
+            print(f'  {d["run"]:<15} {d["set"]:<10} CPU {d["rmsep_mean_cpu"]:.3f} (n={d["n_cpu"]}) vs '
+                  f'GPU {d["rmsep_mean_gpu"]:.3f} (n={d["n_gpu"]}) | p = {d["welch_p"]:.3f}')
+    superseded = superseded_analysis(df, args.runs_dir)
+    for version, s in superseded.items():
+        print(f'\nSuperseded runs {version} (sensitivity analysis), RMSEP mean (SD):')
+        for r in s['regression_summary']:
+            if r['set'] != 'Tuning':
+                print(f'  {r["run"]:<15} {r["set"]:<10} seeds {r["n_seeds"]} | {r["rmsep_mean"]:.3f} ({r["rmsep_sd"]:.3f})')
 
     decision = None
     if DECISION_RUN in runs:
@@ -219,8 +273,8 @@ def main():
               'runs': {run: sorted(seeds) for run, seeds in runs.items()}, 'equivalent_tolerance': EQUIVALENT_TOL,
               'prediction_interval_level': PI_LEVEL,
               'regression_summary': records(summary), 'benchmark_comparison': comparison, 'keras_comparison': keras,
-              'reference_note': REFERENCE_NOTE, 'decision_run': DECISION_RUN,
-              'decision_summary': None if decision is None else records(decision)}
+              'device_comparison': devices, 'reference_note': REFERENCE_NOTE, 'decision_run': DECISION_RUN,
+              'decision_summary': None if decision is None else records(decision), 'superseded': superseded}
     # allow_nan=False: a NaN left anywhere fails here instead of writing invalid JSON
     (RESULTS / 'step3.json').write_text(json.dumps(detail, indent=2, allow_nan=False), encoding='utf-8')
     summary_path = RESULTS / 'summary.json'
@@ -229,7 +283,7 @@ def main():
         'description': 'ANN and 1D-CNN (Walsh 2024 settings) on the fixed Set partition; spectrum-level RMSEP over seeds; '
                        f'decision layer of Step 2 with {DECISION_RUN} (Tuning set unused in training)',
         **{k: detail[k] for k in ('complete', 'missing_runs', 'runs', 'regression_summary', 'benchmark_comparison',
-                                  'keras_comparison', 'decision_summary')},
+                                  'keras_comparison', 'device_comparison', 'decision_summary', 'superseded')},
     }
     # the step3 entry was checked for NaN with step3.json above; other steps are written as they were read
     summary_path.write_text(json.dumps(all_summary, indent=2), encoding='utf-8')
