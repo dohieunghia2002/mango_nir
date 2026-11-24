@@ -42,4 +42,11 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 
 ## Đóng góp của đề tài
 
-Không nằm ở việc dự đoán DMC chính xác hơn (bài toán đã bão hòa, RMSEP 0,77–1,01 %FW), mà ở **tầng quyết định**: biết khi nào "chưa quyết" dựa trên độ bất định đã hiệu chỉnh; xử lý lệch mùa vụ bằng hiệu chỉnh độ lệch theo lô; giải thích từng quyết định và **kiểm chứng độ trung thực của lời giải thích**; đánh giá bằng chỉ số ở mức quyết định. Hướng mới chưa có khảo sát tài liệu về tính mới; cần làm trước khi khẳng định tính mới với giáo sư.
+Không nằm ở việc dự đoán DMC chính xác hơn (bài toán đã bão hòa, RMSEP 0,77–1,01 %FW), mà ở **tầng quyết định**: biết khi nào "chưa quyết" dựa trên độ bất định đã hiệu chỉnh; xử lý lệch mùa vụ bằng hiệu chỉnh độ lệch theo lô; giải thích từng quyết định và **kiểm chứng độ trung thực của lời giải thích**; đánh giá bằng chỉ số ở mức quyết định. **Khảo sát tài liệu về tính mới (24/11/2026, `docs/literature_novelty_review.md`) đã thay đổi định vị này.** Bhargav Teja & Divya Meena (2026, *Talanta* 314:130941, đã đọc toàn văn) dùng file v4 của cùng bộ dữ liệu xoài và đã làm:
+- conformal khi đổi mùa vụ, thiết bị, quần thể (GC-D);
+- hiệu chỉnh độ lệch bằng k = 1–10 quả có nhãn, gồm cách dịch tâm cùng ý tưởng với đề tài (nhưng áp trên khoảng GC-D), và biến thể tốt hơn GC-D-BC;
+- quyết định "cận dưới ≥ ngưỡng DM" có phân tích tỉ lệ chi phí;
+- quy tắc từ chối theo Q;
+- thử một CNN.
+
+Kayaoğlu & Erdem (2026, *Applied Sciences*) khôi phục độ phủ bằng 9–15 mẫu có nhãn khi đổi thiết bị. Vì vậy **không được khẳng định "lần đầu"** cho các điểm trên. Đóng góp chính khả dĩ là **giải thích từng quyết định (kể cả "chưa quyết") có kiểm chứng độ trung thực** (Bước 4, chưa có kết quả). Đóng góp phụ: quyết định ba nhánh theo quả có chi phí đo phá mẫu, và xác nhận độc lập các phát hiện của bài trên *Talanta* (họ tự nêu cần xác nhận độc lập). GC-D, GC-D-BC và anchoring phải được dùng làm đối chứng. Tài liệu bổ sung của bài trên *Talanta* (file Word, mục S1–S28) **không có mã nguồn**: phải hỏi tác giả hoặc cài lại theo mục 2.3 và bảng S1 của họ.

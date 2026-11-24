@@ -144,6 +144,7 @@ Sau đó chạy bằng Python của venv:
 |---|---|
 | `data/` | `MangoDMC_NIR_Data_v3.csv` (35 MB, **không commit**, tải theo hướng dẫn ở mục Dữ liệu) |
 | `docs/PROMPT_ClaudeCode_DSS_XAI_xoai.md` | Đặc tả đề tài: dữ liệu, kiến trúc M1–M5, các bước thực nghiệm, mốc kiểm tra |
+| `docs/literature_novelty_review.md` | Khảo sát tài liệu về tính mới (24/11/2026): các bài đã làm trước, mức độ mới của từng điểm đóng góp, việc cần làm |
 | `docs/*.pdf` | Bài báo gốc Anderson 2020 (`1-s2.0-S0925521420301629-main.pdf`), bài Walsh 2024 và luận văn của Walsh (chỉ có trên máy, không commit) |
 | `scripts/pilot_dss.py` | Pilot ban đầu, dùng làm tham chiếu |
 | `src/data.py` | Đọc dữ liệu, tạo mã quả, kiểm tra số phổ và số quả của từng tập |
