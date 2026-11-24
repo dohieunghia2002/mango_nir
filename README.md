@@ -12,8 +12,6 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
 
 ## Tình trạng hiện tại
 
-- Project này tách ngày 24/11/2026 từ repo `De_Tai_Nong_San` (tag git `xoai-nir`, commit `812cb14`); chỉ giữ phần xoài NIR, dùng để viết bài báo. Lịch sử trước đó (kể cả đề tài lên men penicillin, commit `14a3857` trở về trước) nằm ở repo cũ.
-- Ngày 18/10/2026: chuyển từ đề tài lên men penicillin sang đề tài này.
 - Đã có pilot `scripts/pilot_dss.py` (PLS 11 thành phần, khoảng conformal, hiệu chỉnh lô, cờ bất thường phổ). Các mốc mà pilot đạt được ghi trong mục 5 của đặc tả.
 - **Bước 1 (tái hiện baseline PLS) đã xong ngày 18/10/2026**, khớp các mốc. Số liệu trong `results/summary.json`, mục `step1`:
 

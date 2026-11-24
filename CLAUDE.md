@@ -4,23 +4,20 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 
 ## Tình trạng hiện tại (24/11/2026)
 
-- Project độc lập, tách ra ngày 24/11/2026 từ repo `De_Tai_Nong_San` (tag git `xoai-nir`, commit `812cb14`, ngày 05/11/2026). Chỉ giữ phần xoài NIR; phần WeedsGalore (ảnh UAV) vẫn ở repo cũ.
-- Mục đích: **viết bài báo** từ phần NIR.
+- Mục đích: **viết bài báo** về hệ thống hỗ trợ ra quyết định thu hoạch xoài từ phổ NIR.
 - Bước 1 (baseline PLS) và Bước 2 (tầng quyết định với PLS) đã chạy, kết quả trong `results/`. Bước 3 (ANN, 1D-CNN) đã có code và notebook Colab nhưng **chưa chạy, chưa có kết quả**. Chi tiết trong `README.md`.
 - Việc tiếp theo: tải lại `MangoDMC_NIR_Data_v3.csv` vào `data/` (không còn trên máy), chạy test, rồi chạy Bước 3 trên Colab.
 
 ## Bối cảnh
 
 - Đề tài do giáo sư giao: *"Nghiên cứu mô hình hỗ trợ ra quyết định điều hành sản xuất theo thời gian thực tích hợp AI giải thích được (XAI-driven DSS) trong chuỗi chế biến nông sản."*
-- Ngày 12/10/2026, người làm ban đầu bàn giao dự án cho một đồng nghiệp. Người đang làm việc với Claude là **người nhận bàn giao**, có thể chưa nắm hết chi tiết, nên giải thích rõ khi cần.
-- Ngày 18/10/2026, đề tài chuyển từ mô phỏng lên men penicillin (IndPenSim) sang **hỗ trợ ra quyết định thu hoạch xoài từ phổ NIR**. Sau đó luận văn chuyển sang dữ liệu UAV (WeedsGalore, ở repo `De_Tai_Nong_San`); phần NIR được tách thành project này để viết bài báo.
-- **Đặc tả đầy đủ của đề tài mới nằm trong `docs/PROMPT_ClaudeCode_DSS_XAI_xoai.md`. Đọc file này trước khi viết code:** dữ liệu, kiến trúc M1–M5, các bước thực nghiệm, mốc số liệu cần tái hiện, cấu trúc repo mong muốn.
+- Hướng cụ thể: **hỗ trợ ra quyết định thu hoạch xoài từ phổ NIR**.
+- **Đặc tả đầy đủ của đề tài nằm trong `docs/PROMPT_ClaudeCode_DSS_XAI_xoai.md`. Đọc file này trước khi viết code:** dữ liệu, kiến trúc M1–M5, các bước thực nghiệm, mốc số liệu cần tái hiện, cấu trúc repo mong muốn.
 - `README.md` ghi tình trạng hiện tại và cấu trúc thư mục.
 
 ## Quy tắc bắt buộc
 
 - **Dữ liệu:** giáo sư chỉ chấp nhận bộ dữ liệu công khai đã được bài báo uy tín công bố hoặc sử dụng. Không tự thu thập, không tự sinh dữ liệu; không dùng dữ liệu chỉ có trên Kaggle, dữ liệu tổng hợp hay preprint không có bài báo gốc. Khi đề xuất dữ liệu, ghi bài báo gốc và tạp chí, và nêu rõ nếu dữ liệu thuộc loại không được chấp nhận. Bộ dữ liệu hiện dùng (Anderson et al. 2020, *Postharvest Biology and Technology*) đạt yêu cầu này.
-- **Dữ liệu đa phương tiện (thầy nhận xét ngày 18/10/2026):** dữ liệu chỉ có bảng số (CSV) như bộ NIR thì "đề tài yếu", không được đánh giá là bỏ nhiều công. Luận văn cần dữ liệu **ảnh hoặc video**; thầy gợi ý **dữ liệu UAV (drone)**, hướng tới thiết kế thu hoạch tự động. Phần NIR đã làm có thể dùng để viết bài báo.
 - **Không bịa số liệu:** mọi con số trong báo cáo phải lấy từ output thực tế (`results/summary.json`). Chưa chạy thì ghi "chưa có kết quả".
 - **Tính toán nặng:** không tự huấn luyện mạng nơ-ron (ANN, 1D-CNN) trên máy người dùng; viết notebook Google Colab (GPU T4). Chỉ chạy cục bộ các kiểm tra nhanh (vài giây), và mô tả trước khi chạy. Làm từng bước nhỏ; sau mỗi bước in kết quả kiểm tra (số dòng, số quả, sai số so với mốc) và dừng lại nếu lệch mốc. Không tự làm chuỗi bước lớn ngoài yêu cầu. Lý do: người làm trước từng phản đối khi Claude chạy mô phỏng dài trên laptop mà không hỏi.
 - **Giới hạn Colab miễn phí (người dùng ghi nhận ngày 18/10/2026):** mỗi phiên GPU T4 chỉ dùng được tối đa khoảng **5 tiếng**, sau đó có thể bị tạm ngừng cấp GPU. Notebook phải:
