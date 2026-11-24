@@ -12,5 +12,5 @@ __pycache__/
 # Dữ liệu gốc (35 MB, tải từ Mendeley Data, xem README.md): không đưa lên GitHub
 data/*.csv
 
-# Gói kết quả tải về từ Colab (ket_qua_buoc3.zip): giải nén vào results/, không đưa lên GitHub
-ket_qua_*.zip
+# Gói kết quả tải về từ Colab (step3_results.zip): giải nén vào results/, không đưa lên GitHub
+step*_results.zip

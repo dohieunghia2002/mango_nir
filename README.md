@@ -65,9 +65,9 @@ Sau đó chạy bằng Python của venv:
 
 **Bước 3 chạy trên Google Colab** (GPU T4), không chạy trên laptop:
 
-1. Upload `MangoDMC_NIR_Data_v3.csv` vào `MyDrive/Xoai_NIR/data/` và mở `notebooks/colab_cnn.ipynb` bằng Colab. Notebook tự lấy mã nguồn từ GitHub, nên mọi thay đổi trong `src/` phải được push trước khi chạy.
+1. Upload `MangoDMC_NIR_Data_v3.csv` vào `MyDrive/Mango_NIR/data/` và mở `notebooks/colab_cnn.ipynb` bằng Colab. Notebook tự lấy mã nguồn từ GitHub, nên mọi thay đổi trong `src/` phải được push trước khi chạy.
 2. Chọn *Runtime → Change runtime type → T4 GPU*, rồi chạy lần lượt từng ô. Nếu Colab ngắt kết nối, chạy lại từ đầu: các mô hình đã xong được bỏ qua.
-3. Tải `MyDrive/Xoai_NIR/ket_qua_buoc3.zip` về và giải nén vào thư mục gốc repo. Thao tác này tạo `results/step3/` và cập nhật `results/summary.json`.
+3. Tải `MyDrive/Mango_NIR/step3_results.zip` về và giải nén vào thư mục gốc repo. Thao tác này tạo `results/step3/` và cập nhật `results/summary.json`.
 
 ## Cấu trúc thư mục
 
