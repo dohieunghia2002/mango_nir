@@ -70,12 +70,12 @@
           "rmsep_match": true
         },
         {
-          "source": "Walsh et al. 2024, best PLS (different tuning)",
+          "source": "Walsh et al. 2024, best PLS (different tuning; published bias +1.56 in true - pred)",
           "rmsep": 1.87,
-          "bias": 1.56,
+          "bias": -1.56,
           "must_match": false,
           "rmsep_diff": -0.03948637315576842,
-          "bias_diff": -3.0351706666814695,
+          "bias_diff": 0.0848293333185306,
           "rmsep_match": false
         }
       ]

@@ -17,14 +17,17 @@ RESULTS = ROOT / 'results'
 N_COMPONENTS = 11
 TOL = 0.005  # benchmarks are reported with 2 decimals
 
-# Spectrum-level benchmarks in %FW. Our bias is mean(pred - true); the papers' sign convention is not stated.
+# Spectrum-level benchmarks in %FW, all with our bias convention mean(pred - true), as in Anderson et al. 2020.
+# Walsh et al. 2024 report mean(true - pred) (their utils/evaluation.py; Anderson's PLS is +0.07 in their Table 1),
+# so their published bias is sign-flipped here: +1.56 -> -1.56.
 BENCHMARKS = {
     'Val Ext': [
         {'source': 'Anderson et al. 2020, Table 6 (PLSR - all, 11 LV)', 'rmsep': 1.01, 'bias': -0.07, 'must_match': True},
     ],
     'Val Ext 2': [
         {'source': 'pilot_dss.py (same method)', 'rmsep': 1.83, 'bias': -1.48, 'must_match': True},
-        {'source': 'Walsh et al. 2024, best PLS (different tuning)', 'rmsep': 1.87, 'bias': 1.56, 'must_match': False},
+        {'source': 'Walsh et al. 2024, best PLS (different tuning; published bias +1.56 in true - pred)',
+         'rmsep': 1.87, 'bias': -1.56, 'must_match': False},
     ],
 }
 
