@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from src.data import ROOT, TARGET, load_data, set_masks
 from src.models_pls import regression_metrics
@@ -20,13 +21,18 @@ RESULTS = ROOT / 'results'
 DECISION_RUN = 'cnn_AT_calonly'
 EVAL_SETS = ['Tuning', 'Val Ext', 'Val Ext 2']
 EQUIVALENT_TOL = 0.05  # about twice the seed-to-seed SD of RMSEP in Walsh 2024, Table 2 (0.02-0.03 %FW)
+PI_LEVEL = 0.95
 
 # Walsh 2024 models trained like ours: Set partition (KS population), file order, no extra outlier removal,
-# standardised inputs. Walsh reports bias as mean(true - pred); converted here to our mean(pred - true).
+# standardised inputs. Values from their Appendix A (Mendeley Data doi:10.17632/mc9jshwb38.1, appendix_a_model_results.xlsx),
+# where each model is a single training run (seed 42; raw_results.csv has one row per configuration).
+# Walsh reports bias as mean(true - pred); converted here to our mean(pred - true).
 BENCHMARKS = {
-    'ann_S_cal': {'source': 'Walsh 2024, Table 5, model A026', 'rmsep': 0.96, 'bias': 0.01},
-    'ann_S_all': {'source': 'Walsh 2024, Tables 1 and 3, model A002 (Anderson 2020 ANN: 0.89)', 'rmsep': 0.89, 'bias': -0.08},
-    'cnn_TA_cal': {'source': 'Walsh 2024, Table 5, model C028', 'rmsep': 0.82, 'bias': 0.01},
+    'ann_S_cal': {'source': 'Walsh 2024, Appendix A, A026 (also Table 5)', 'rmsep': 0.958, 'bias': 0.013},
+    'ann_S_all': {'source': 'Walsh 2024, Appendix A, A002 (Tables 1, 3; Anderson 2020 ANN: 0.89)', 'rmsep': 0.893, 'bias': -0.080},
+    'cnn_TA_cal': {'source': 'Walsh 2024, Appendix A, C028 (also Table 5)', 'rmsep': 0.824, 'bias': 0.006},
+    'cnn_AT_cal': {'source': 'Walsh 2024, Appendix A, C030', 'rmsep': 0.814, 'bias': 0.067},
+    'cnn_AT_all': {'source': 'Walsh 2024, Appendix A, C006', 'rmsep': 0.827, 'bias': -0.027},
 }
 REFERENCE_NOTE = ('Not comparable, reference only: Walsh 2024 best models used the extra outlier removal of Mishra & Passos '
                   '2021 and/or their random sample partition. CNN C134: season 4 RMSEP 0.77, season 5 RMSEP 1.18 '
@@ -68,17 +74,31 @@ def summarise_regression(reg):
     return out.reset_index()
 
 
-def benchmark_comparison(summary):
+def prediction_interval(values, level=PI_LEVEL):
+    """Interval expected to contain one new run with probability `level` (t distribution, n - 1 df):
+    mean +- t * SD * sqrt(1 + 1/n). Fits the comparison with Walsh's single runs."""
+    v = np.asarray(values, dtype=float)
+    if v.size < 2:
+        return float('nan'), float('nan')
+    h = stats.t.ppf((1 + level) / 2, v.size - 1) * v.std(ddof=1) * np.sqrt(1 + 1 / v.size)
+    return float(v.mean() - h), float(v.mean() + h)
+
+
+def benchmark_comparison(reg):
+    """Season 4 RMSEP against Walsh's single runs with two criteria: |mean over seeds - Walsh| <= EQUIVALENT_TOL
+    ('equivalent', set before the runs), and Walsh's value inside the PI_LEVEL prediction interval of one run
+    ('within_pi', added after Walsh's values turned out to be single runs)."""
     out = []
     for run, b in BENCHMARKS.items():
-        row = summary[(summary['run'] == run) & (summary['set'] == 'Val Ext')]
-        if row.empty:
+        v = reg[(reg['run'] == run) & (reg['set'] == 'Val Ext')]
+        if v.empty:
             continue
-        r = row.iloc[0]
-        diff = float(r['rmsep_mean'] - b['rmsep'])
-        out.append({'run': run, **b, 'rmsep_mean': float(r['rmsep_mean']), 'rmsep_sd': float(r['rmsep_sd']),
-                    'bias_mean': float(r['bias_mean']), 'n_seeds': int(r['n_seeds']), 'rmsep_diff': diff,
-                    'equivalent': bool(abs(diff) <= EQUIVALENT_TOL)})
+        diff = float(v['rmsep'].mean() - b['rmsep'])
+        lo, hi = prediction_interval(v['rmsep'])
+        out.append({'run': run, **b, 'rmsep_mean': float(v['rmsep'].mean()), 'rmsep_sd': float(v['rmsep'].std()),
+                    'bias_mean': float(v['bias'].mean()), 'n_seeds': int(v['seed'].nunique()), 'rmsep_diff': diff,
+                    'equivalent': bool(abs(diff) <= EQUIVALENT_TOL), 'pi_low': lo, 'pi_high': hi,
+                    'within_pi': bool(lo <= b['rmsep'] <= hi)})
     return out
 
 
@@ -112,11 +132,13 @@ def main():
     for _, r in summary.iterrows():
         print(f'  {r["run"]:<15} {r["set"]:<10} seeds {r["n_seeds"]} | RMSEP {r["rmsep_mean"]:.3f} ({r["rmsep_sd"]:.3f}), '
               f'range {r["rmsep_min"]:.3f}-{r["rmsep_max"]:.3f} | bias {r["bias_mean"]:+.3f}')
-    comparison = benchmark_comparison(summary)
-    print(f'\nSeason 4 vs comparable Walsh 2024 models (equivalent if |diff| <= {EQUIVALENT_TOL}):')
+    comparison = benchmark_comparison(reg)
+    print(f'\nSeason 4 vs comparable Walsh 2024 models (single runs): mean within +-{EQUIVALENT_TOL}, '
+          f'and Walsh inside the {PI_LEVEL:.0%} prediction interval of one of our runs:')
     for c in comparison:
-        status = 'TƯƠNG ĐƯƠNG' if c['equivalent'] else 'KHÁC'
-        print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} vs {c["rmsep"]:.2f} ({c["source"]}), diff {c["rmsep_diff"]:+.3f} -> {status}')
+        print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} ({c["n_seeds"]} seeds) vs {c["rmsep"]:.3f} ({c["source"]}), '
+              f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | '
+              f'PI [{c["pi_low"]:.3f}, {c["pi_high"]:.3f}] -> {"TRONG" if c["within_pi"] else "NGOÀI"}')
     print(f'  {REFERENCE_NOTE}')
 
     decision = None
@@ -132,6 +154,7 @@ def main():
 
     reg.to_csv(RESULTS / 'step3_regression.csv', index=False)
     detail = {'runs': {run: sorted(seeds) for run, seeds in runs.items()}, 'equivalent_tolerance': EQUIVALENT_TOL,
+              'prediction_interval_level': PI_LEVEL,
               'regression_summary': records(summary), 'benchmark_comparison': comparison,
               'reference_note': REFERENCE_NOTE, 'decision_run': DECISION_RUN,
               'decision_summary': None if decision is None else records(decision)}

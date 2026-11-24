@@ -66,14 +66,20 @@ def train(kind, X_train, y_train, X_val=None, y_val=None, seed=0, max_epochs=Non
     model = {'ann': build_ann, 'cnn': build_cnn}[kind](X_train.shape[1], seed)
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=LEARNING_RATE), loss='mse')
     validation = (X_val, y_val) if X_val is not None else None
+    callbacks = make_callbacks(validation is not None)
+    early_stopping = callbacks[-1]
     t0 = time.time()
     history = model.fit(X_train, y_train, batch_size=BATCH, epochs=max_epochs or MAX_EPOCHS[kind],
-                        validation_data=validation, callbacks=make_callbacks(validation is not None),
-                        shuffle=True, verbose=verbose)
+                        validation_data=validation, callbacks=callbacks, shuffle=True, verbose=verbose)
     h = history.history
     monitored = h['val_loss'] if validation is not None else h['loss']
-    return model, {'epochs': len(h['loss']), 'best_epoch': int(np.argmin(monitored)) + 1,
-                   'train_seconds': time.time() - t0, 'best_monitored_loss': float(np.min(monitored))}
+    restored = int(early_stopping.best_epoch)  # 0-based; Keras 3 restores these weights at the end of training
+    # The restored epoch is the last one that improved the monitored loss by more than min_delta, so it can precede
+    # the epoch of the lowest loss (min_monitored_epoch), by up to the patience when the training loss is monitored.
+    return model, {'epochs': len(h['loss']), 'restored_epoch': restored + 1,
+                   'restored_monitored_loss': float(monitored[restored]),
+                   'min_monitored_epoch': int(np.argmin(monitored)) + 1, 'min_monitored_loss': float(np.min(monitored)),
+                   'train_seconds': time.time() - t0}
 
 
 def predict(model, X):

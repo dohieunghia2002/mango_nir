@@ -32,18 +32,29 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
 
   Các tỉ lệ có hiệu chỉnh lô là trung bình gộp của 30 lần rút ngẫu nhiên. Độ lệch chuẩn giữa các lần lặp nằm trong `results/step2_decision_metrics.csv`. Ví dụ, mùa vụ 5 với k = 5 có tỉ lệ tự quyết 53,1% ± 6,0%.
 - Chưa làm: chọn ngưỡng defer tối ưu theo chi phí (mô-đun M4). Phần này cần các giá trị chi phí có nguồn trích dẫn.
-- **Bước 3 (ANN và 1D-CNN): mã nguồn và notebook Colab đã sẵn sàng, chưa có kết quả.** Có 6 cấu hình theo thiết lập của Walsh 2024, mỗi cấu hình 5 seed. Các mốc so sánh với mùa vụ 4:
+- **Bước 3 (ANN và 1D-CNN): đã chạy lần 1 trên Colab ngày 24/11/2026 (30 mô hình, commit `b59b16d`); đang chờ chạy lần 2.** Có 6 cấu hình theo thiết lập của Walsh 2024, mỗi cấu hình 5 seed; `cnn_TA_cal` có thêm 15 seed (5–19). Các mốc so sánh với mùa vụ 4, lấy từ Phụ lục A của Walsh 2024 (Mendeley Data doi:10.17632/mc9jshwb38.1, `appendix_a_model_results.xlsx`), bias đã đổi sang quy ước dự đoán − thật:
 
 | Cấu hình | Mô tả | Mốc (Walsh 2024, cùng cách chia tập) |
 |---|---|---|
-| `ann_S_cal` | ANN, đạo hàm bậc 2; huấn luyện trên Cal, dừng sớm theo Tuning | 0,96 (A026, Bảng 5) |
-| `ann_S_all` | ANN, đạo hàm bậc 2; huấn luyện trên Cal + Tuning | 0,89 (A002, Bảng 1; Anderson 2020: 0,89) |
-| `cnn_TA_cal` | CNN, cắt rồi tăng cường phổ; Cal, dừng sớm theo Tuning | 0,82 (C028, Bảng 5) |
-| `cnn_AT_cal`, `cnn_AT_all` | CNN, tăng cường rồi cắt (cách tiền xử lý tốt nhất của Walsh) | Không có mốc cùng cách chia tập (Phụ lục A chỉ có trên web) |
+| `ann_S_cal` | ANN, đạo hàm bậc 2; huấn luyện trên Cal, dừng sớm theo Tuning | 0,958 (A026; Bảng 5) |
+| `ann_S_all` | ANN, đạo hàm bậc 2; huấn luyện trên Cal + Tuning | 0,893 (A002; Bảng 1; Anderson 2020: 0,89) |
+| `cnn_TA_cal` | CNN, cắt rồi tăng cường phổ; Cal, dừng sớm theo Tuning | 0,824 (C028; Bảng 5) |
+| `cnn_AT_cal` | CNN, tăng cường rồi cắt (cách tiền xử lý tốt nhất của Walsh); Cal, dừng sớm theo Tuning | 0,814 (C030) |
+| `cnn_AT_all` | Như trên; huấn luyện trên Cal + Tuning | 0,827 (C006) |
 | `cnn_AT_calonly` | Như `cnn_AT_cal` nhưng không dùng Tuning dưới bất kỳ hình thức nào | Dùng cho tầng quyết định: Tuning hiệu chỉnh khoảng conformal |
 
-  Mốc 0,77 (mùa vụ 4) và 1,18 (mùa vụ 5) trong đặc tả là của mô hình C134. Mô hình này loại thêm 329 phổ ngoại lai theo Mishra & Passos 2021 và chia lại Cal/Tuning ngẫu nhiên theo phổ, nên **không so sánh trực tiếp được** với cách chia tập cố định của đề tài. Tiêu chí "tương đương": chênh lệch RMSEP trung bình không quá 0,05 %FW, khoảng 2 lần độ lệch chuẩn giữa các seed mà Walsh báo cáo.
-- Bước tiếp theo: chạy notebook Bước 3 trên Colab (xem mục Cách chạy).
+  Đối chiếu với dữ liệu Walsh công bố (Mendeley `mc9jshwb38`), thực hiện ngày 24/11/2026:
+  - Dữ liệu, phân chia Cal/Tuning/Val Ext, thứ tự mẫu, nhãn DM và đặc trưng `S` trùng với của đề tài (11.691 phổ mùa vụ 1–4).
+  - Mỗi mô hình của Walsh là **một lần huấn luyện duy nhất** (seed 42, TensorFlow 2.11): `raw_results.csv` có đúng một dòng cho mỗi cấu hình.
+  - Tiền xử lý AT của Walsh (`mishra&passos_2021_pretreatment_adjusted.csv`) tính SNV trên dải **402–1098 nm** với `ddof=1`; code của Walsh không nêu lý do chọn dải này. Lần chạy 1 tính SNV trên toàn phổ 285–1200 nm, nên các mô hình AT được chạy lại (lần 2). Kết quả AT của lần 1 được giữ trong `results/step3/superseded/v1/`. TA chỉ lệch Walsh một hằng số nhân (√(102/103)), bị bước chuẩn hóa triệt tiêu, nên không chạy lại.
+  - Sau khi sửa, `augment` tái tạo các file TA và AT mùa vụ 5 của Walsh đến sai số làm tròn (test `test_augment_reproduces_walsh_input_files`).
+
+  Hai tiêu chí so sánh: (1) "tương đương" nếu RMSEP trung bình qua các seed lệch mốc không quá 0,05 %FW, khoảng 2 lần độ lệch chuẩn giữa các seed mà Walsh báo cáo (đặt trước khi chạy); (2) giá trị của Walsh nằm trong khoảng dự đoán 95% cho một lần chạy, tính từ các seed của đề tài (thêm sau lần chạy 1, khi xác nhận mốc của Walsh là lần chạy đơn lẻ). Khi viết bài phải báo cáo cả hai tiêu chí và nêu rõ tiêu chí (2) được thêm sau.
+
+  Mốc 0,77 (mùa vụ 4) và 1,18 (mùa vụ 5) trong đặc tả là của mô hình C134. Mô hình này loại thêm 329 phổ ngoại lai theo Mishra & Passos 2021 và chia lại Cal/Tuning ngẫu nhiên theo phổ, nên **không so sánh trực tiếp được** với cách chia tập cố định của đề tài.
+
+  Trong metadata của lần chạy 1 (`results/step3/runs/*.json`), trường `best_epoch` là epoch có loss thấp nhất, **không phải** epoch được EarlyStopping khôi phục; với các cấu hình theo dõi loss huấn luyện (`ann_S_all`, `cnn_AT_all`, `cnn_AT_calonly`) hai epoch này khác nhau. Từ lần chạy 2, metadata ghi `restored_epoch` (epoch được khôi phục) và `min_monitored_epoch`.
+- Bước tiếp theo: chạy lại notebook Bước 3 trên Colab (lần 2: 15 mô hình AT và 15 seed thêm cho `cnn_TA_cal`), rồi phân tích kết quả.
 
 ## Cách chạy
 
@@ -94,6 +105,7 @@ Sau đó chạy bằng Python của venv:
 - **Mango DMC and NIR spectra**, Anderson, Walsh, Subedi, Walsh. Mendeley Data, doi:[10.17632/46htwnp833](https://doi.org/10.17632/46htwnp833) (bản v5), giấy phép CC BY 4.0.
 - Bài báo gốc: Anderson et al. (2020), *Postharvest Biology and Technology* 168:111202 (xem mục Tài liệu tham khảo).
 - File dùng: `MangoDMC_NIR_Data_v3.csv`, gồm 12.011 phổ và 315 cột (9 cột thông tin, nhãn `DM`, 306 cột phổ hấp thụ 285–1200 nm, bước 3 nm). Tải bộ dữ liệu từ Mendeley Data và đặt file này vào `data/`.
+- Không bắt buộc, chỉ để kiểm tra tiền xử lý: file đầu vào mùa vụ 5 đã tiền xử lý của Walsh 2024 (Mendeley Data doi:[10.17632/mc9jshwb38.1](https://doi.org/10.17632/mc9jshwb38.1), thư mục `input/season_5`). Đặt `mishra&passos_2021_pretreatment.csv` và `mishra&passos_2021_pretreatment_adjusted.csv` vào `data/` với tên `Walsh2024_season5_mishra_pretreatment.csv` và `Walsh2024_season5_mishra_pretreatment_adjusted.csv`. Thiếu hai file này thì test tương ứng được bỏ qua. Không dùng chúng để huấn luyện.
 - Phân chia có sẵn trong cột `Set`: `Cal`, `Tuning` (huấn luyện); `Val Ext` (mùa vụ 4); `Val Ext 2` (mùa vụ 5). Không chia ngẫu nhiên.
 
 ## Tài liệu tham khảo
