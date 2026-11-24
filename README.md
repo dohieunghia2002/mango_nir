@@ -32,16 +32,68 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
 
   Các tỉ lệ có hiệu chỉnh lô là trung bình gộp của 30 lần rút ngẫu nhiên. Độ lệch chuẩn giữa các lần lặp nằm trong `results/step2_decision_metrics.csv`. Ví dụ, mùa vụ 5 với k = 5 có tỉ lệ tự quyết 53,1% ± 6,0%.
 - Chưa làm: chọn ngưỡng defer tối ưu theo chi phí (mô-đun M4). Phần này cần các giá trị chi phí có nguồn trích dẫn.
-- **Bước 3 (ANN và 1D-CNN): đã chạy lần 1 (30 mô hình, commit `b59b16d`) và lần 2 (15 mô hình AT chạy lại, 15 seed thêm cho `cnn_TA_cal`, commit `f99661b`) trên Colab ngày 24/11/2026; thí nghiệm Keras 2 (`cnn_TA_cal_k2`) chưa chạy.** Có 6 cấu hình theo thiết lập của Walsh 2024, mỗi cấu hình 5 seed; `cnn_TA_cal` có thêm 15 seed (5–19). Ở lần 2, seed 16–19 của `cnn_TA_cal` chạy trên CPU (một phiên Colab không có GPU); RMSEP mùa vụ 4 của chúng không khác các seed chạy GPU (Welch p = 0,88). Các mốc so sánh với mùa vụ 4, lấy từ Phụ lục A của Walsh 2024 (Mendeley Data doi:10.17632/mc9jshwb38.1, `appendix_a_model_results.xlsx`), bias đã đổi sang quy ước dự đoán − thật:
+- **Bước 3 (ANN và 1D-CNN) đã xong ngày 24/11/2026.** Ba lần chạy trên Colab (GPU T4): lần 1 (30 mô hình, commit `b59b16d`); lần 2 (15 mô hình AT chạy lại sau khi sửa SNV, 15 seed thêm cho `cnn_TA_cal`, commit `f99661b`); thí nghiệm Keras 2 (10 mô hình `cnn_TA_cal_k2`, commit `d45bc81` cộng một bản vá, xem dưới). Số liệu trong `results/summary.json`, mục `step3`; giá trị từng seed trong `results/step3_regression.csv` và `results/step3_decision_metrics.csv`. Các mốc so sánh lấy từ Phụ lục A của Walsh 2024 (Mendeley Data doi:10.17632/mc9jshwb38.1, `appendix_a_model_results.xlsx`), bias đã đổi sang quy ước dự đoán − thật.
 
 | Cấu hình | Mô tả | Mốc (Walsh 2024, cùng cách chia tập) |
 |---|---|---|
 | `ann_S_cal` | ANN, đạo hàm bậc 2; huấn luyện trên Cal, dừng sớm theo Tuning | 0,958 (A026; Bảng 5) |
 | `ann_S_all` | ANN, đạo hàm bậc 2; huấn luyện trên Cal + Tuning | 0,893 (A002; Bảng 1; Anderson 2020: 0,89) |
 | `cnn_TA_cal` | CNN, cắt rồi tăng cường phổ; Cal, dừng sớm theo Tuning | 0,824 (C028; Bảng 5) |
+| `cnn_TA_cal_k2` | Như `cnn_TA_cal` nhưng huấn luyện bằng Keras 2 (thí nghiệm) | 0,824 (C028) |
 | `cnn_AT_cal` | CNN, tăng cường rồi cắt (cách tiền xử lý tốt nhất của Walsh); Cal, dừng sớm theo Tuning | 0,814 (C030) |
 | `cnn_AT_all` | Như trên; huấn luyện trên Cal + Tuning | 0,827 (C006) |
 | `cnn_AT_calonly` | Như `cnn_AT_cal` nhưng không dùng Tuning dưới bất kỳ hình thức nào | Dùng cho tầng quyết định: Tuning hiệu chỉnh khoảng conformal |
+
+  RMSEP theo phổ (%FW), trung bình (độ lệch chuẩn) qua các seed. Cột "Seed tốt hơn mốc" đếm số seed có RMSEP mùa vụ 4 thấp hơn mốc của Walsh:
+
+| Cấu hình | Seed | Mùa vụ 4 | Mùa vụ 5 | Bias mùa vụ 5 | Mốc Walsh (mùa vụ 4) | Seed tốt hơn mốc | ±0,05 | Khoảng dự đoán 95% |
+|---|---|---|---|---|---|---|---|---|
+| PLS (Bước 1) | – | 1,014 | 1,831 | −1,475 | – | – | – | – |
+| `ann_S_cal` | 5 | 0,885 (0,029) | 2,575 (0,200) | −2,312 | 0,958 (A026) | 5/5 | không đạt | trong [0,798; 0,972] |
+| `ann_S_all` | 5 | 0,918 (0,017) | 2,548 (0,158) | −2,276 | 0,893 (A002) | 0/5 | đạt | trong [0,866; 0,969] |
+| `cnn_TA_cal` | 20 | 0,899 (0,046) | 1,303 (0,184) | −0,692 | 0,824 (C028) | 0/20 | không đạt | trong [0,801; 0,997] |
+| `cnn_TA_cal_k2` | 10 | 0,883 (0,039) | 1,399 (0,117) | −0,865 | 0,824 (C028) | 0/10 | không đạt | trong [0,789; 0,976] |
+| `cnn_AT_cal` | 5 | 0,899 (0,037) | 1,403 (0,296) | −0,844 | 0,814 (C030) | 0/5 | không đạt | trong [0,785; 1,012] |
+| `cnn_AT_all` | 5 | 0,939 (0,041) | 1,404 (0,233) | −0,800 | 0,827 (C006) | 0/5 | không đạt | trong [0,815; 1,064] |
+| `cnn_AT_calonly` | 5 | 0,913 (0,048) | 1,379 (0,155) | −0,849 | – | – | – | – |
+
+  - Ở mùa vụ 4, cả ANN và CNN đều tốt hơn PLS (0,88–0,94 so với 1,01). Ở mùa vụ 5, CNN tốt hơn hẳn PLS và ANN (1,30–1,40 so với 1,83 của PLS và 2,55–2,58 của ANN), với lệch hệ thống nhỏ hơn nhiều.
+  - So với Walsh: cả 6 mốc nằm trong khoảng dự đoán 95%, nhưng chỉ `ann_S_all` đạt tiêu chí ±0,05. Với ANN, mốc của Walsh khi kém hơn mọi seed (A026), khi tốt hơn mọi seed (A002), không theo một chiều. Với CNN, mô hình đơn lẻ của Walsh tốt hơn **mọi** seed của đề tài ở cả bốn cấu hình CNN có mốc (0/20, 0/10, 0/5, 0/5), chênh 0,059–0,112 %FW so với trung bình: đây là khác biệt hệ thống, không phải dao động giữa các seed.
+
+  **Thí nghiệm Keras 2.** Dữ liệu, tiền xử lý, kiến trúc và thiết lập huấn luyện đã đối chiếu là giống Walsh; khác biệt còn lại lớn nhất là Walsh dùng TensorFlow 2.11 (Keras 2), đề tài dùng TensorFlow 2.21 (Keras 3). Cấu hình `cnn_TA_cal_k2` giống hệt `cnn_TA_cal` nhưng huấn luyện bằng Keras 2 (gói `tf-keras` 2.21.0 trên cùng TensorFlow 2.21, chọn qua `TF_USE_LEGACY_KERAS`), 10 seed. RMSEP trung bình (độ lệch chuẩn), Welch t-test (mục `keras_comparison`):
+
+| Tập | Keras 2 (10 seed) | Keras 3 (20 seed) | Chênh lệch | p | Walsh (C028) |
+|---|---|---|---|---|---|
+| Tuning | 0,809 (0,017) | 0,841 (0,022) | −0,032 | < 0,001 | 0,811 |
+| Mùa vụ 4 | 0,883 (0,039) | 0,899 (0,046) | −0,017 | 0,317 | 0,824 |
+| Mùa vụ 5 | 1,399 (0,117) | 1,303 (0,184) | +0,097 | 0,092 | – |
+
+  Keras 2 khớp Walsh trên Tuning và khác Keras 3 có ý nghĩa thống kê, nhưng không thu hẹp đáng kể chênh lệch ở mùa vụ 4 (vẫn 0/10 seed tốt hơn C028). **Phiên bản Keras không giải thích được chênh lệch với Walsh ở mùa vụ 4; nguyên nhân chưa xác định.** Các khả năng còn lại không kiểm chứng được: mô hình đơn lẻ của Walsh là một lần chạy thuận lợi; khác biệt khác giữa TensorFlow 2.11 (CPU Intel) và môi trường hiện tại; code lúc Walsh huấn luyện khác code công bố (repo của Walsh chỉ có một commit, tạo sau khi huấn luyện, và notebook công bố không chạy cấu hình C028 vì lệnh `break`). Mô hình chính của đề tài vẫn dùng Keras 3 như kế hoạch ban đầu; thí nghiệm Keras 2 được báo cáo như phân tích độ nhạy. Giới hạn: `tf-keras` 2.21 là nhánh Keras 2 được duy trì cho TensorFlow 2.21, không trùng hoàn toàn với Keras 2.11 (ví dụ EarlyStopping của nó khôi phục trọng số trong `on_train_end` như Keras 3; lớp `EarlyStoppingKeras211` trong `src/models_nn.py` đưa cả hai về cách làm của Keras 2.11). Các mô hình `cnn_TA_cal_k2` được huấn luyện bằng code commit `d45bc81` cộng một bản vá áp ngay trong ô 6b trên Colab (đọc phiên bản Keras từ gói đứng sau `tf.keras`; metadata có trường `code_patch`); commit sau đó chứa bản sửa tương đương (`keras_info`). Metadata ghi gói Keras thực sự được dùng (`keras_package`) và phiên bản của nó.
+
+  Ở lần chạy 2, seed 16–19 của `cnn_TA_cal` chạy trên CPU (một phiên Colab không có GPU). RMSEP mùa vụ 4 của chúng không khác các seed chạy GPU: 0,896 so với 0,900 (n = 4 và 16, Welch p = 0,88; mục `device_comparison`).
+
+  **Độ nhạy theo cách tính SNV của AT** (mục `superseded`): lần chạy 1 tính SNV trên toàn phổ (v1), lần chạy 2 trên 402–1098 nm như file của Walsh (v2). RMSEP trung bình qua 5 seed, v1 → v2:
+
+| Cấu hình | Mùa vụ 4 | Mùa vụ 5 |
+|---|---|---|
+| `cnn_AT_cal` | 0,869 → 0,899 | 1,104 → 1,403 |
+| `cnn_AT_all` | 0,885 → 0,939 | 1,252 → 1,404 |
+| `cnn_AT_calonly` | 0,911 → 0,913 | 1,169 → 1,379 |
+
+  Kết quả chính dùng v2 vì đúng phương pháp của Walsh; chọn v1 vì nó tốt hơn trên tập kiểm thử sẽ là chọn mô hình theo tập kiểm thử.
+
+  **Tầng quyết định với CNN** (`cnn_AT_calonly`, T = 15 %FW, trung bình 5 seed; có hiệu chỉnh lô thì gộp 30 lần rút). Mỗi ô ghi PLS (Bước 2) / CNN v2 (độ lệch chuẩn giữa các seed) / CNN v1. Nửa độ rộng khoảng 90%: PLS 1,255; CNN v2 1,280; CNN v1 1,247 %FW.
+
+| Tập | Hiệu chỉnh lô | Độ phủ khoảng 90% | Tự quyết | Đúng trên quả tự quyết | Báo "đủ chín" sai (trên quả tự quyết) |
+|---|---|---|---|---|---|
+| Mùa vụ 4 | không | 76,4% / 86,2% (2,5) / 84,2% | 71,9% / 72,3% (2,1) / 71,9% | 99,6% / 99,4% (0,2) / 99,2% | 0,2% / 0,1% (0,1) / 0,6% |
+| Mùa vụ 4 | k = 5 | 91,3% / 92,2% (1,3) / 92,1% | 71,1% / 71,3% (0,9) / 71,6% | 99,7% / 99,6% (0,2) / 99,7% | 0,2% / 0,3% (0,1) / 0,2% |
+| Mùa vụ 5 | không | 18,8% / 68,0% (7,3) / 81,0% | 46,9% / 47,0% (3,2) / 47,4% | 72,0% / 93,5% (3,4) / 97,4% | 0,0% / 0,0% (0,0) / 0,8% |
+| Mùa vụ 5 | k = 5 | 84,9% / 83,0% (2,6) / 83,8% | 53,1% / 53,2% (3,3) / 54,6% | 95,1% / 95,5% (1,2) / 96,0% | 4,9% / 3,9% (0,9) / 3,2% |
+
+  - Ở mùa vụ 5 khi không hiệu chỉnh lô, CNN giữ khoảng conformal hữu dụng hơn hẳn PLS (độ phủ 68,0% so với 18,8%; đúng trên quả tự quyết 93,5% so với 72,0%), nhưng độ phủ vẫn xa mức 90%: khoảng conformal không còn hiệu chỉnh đúng khi đổi mùa vụ.
+  - Có hiệu chỉnh lô (k = 5), PLS và CNN cho kết quả gần nhau. Với CNN, hiệu chỉnh lô tăng tỉ lệ tự quyết (47,0% → 53,2%) nhưng cũng tăng báo "đủ chín" sai (0,0% → 3,9%). Hai dòng "không" và "k = 5" tính trên tập quả khác nhau (bỏ k quả tham chiếu mỗi quần thể).
+  - Số liệu với T = 14 và 16 %FW, và với k = 10, trong `results/summary.json`.
 
   Đối chiếu với dữ liệu Walsh công bố (Mendeley `mc9jshwb38`), thực hiện ngày 24/11/2026:
   - Dữ liệu, phân chia Cal/Tuning/Val Ext, thứ tự mẫu, nhãn DM và đặc trưng `S` trùng với của đề tài (11.691 phổ mùa vụ 1–4).
@@ -60,8 +112,7 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
   Phân tích (`src/step3_analysis.py`) chỉ dùng dự đoán có phiên bản đặc trưng hiện hành, ghi `complete`, `missing_runs` và `excluded_older_features` vào `results/step3.json`, và trả mã lỗi nếu còn thiếu mô hình. Trong notebook, script huấn luyện và phân tích được gọi qua `run_module`, nên khi một script dừng vì hết giờ hoặc vì thiếu mô hình, notebook dừng lại và không đóng gói kết quả chưa đầy đủ.
 
   CLAUDE.md yêu cầu tiền xử lý trên runtime CPU. Notebook chưa làm vậy: đặc trưng được tính ngay trong phiên GPU, vì chỉ mất vài giây.
-  **Thí nghiệm Keras 2.** Ở lần chạy 2, mô hình đơn lẻ của Walsh tốt hơn mọi seed của đề tài ở mùa vụ 4 với cả ba cấu hình CNN (`cnn_TA_cal` 0/20 seed tốt hơn C028, `cnn_AT_cal` 0/5 so với C030, `cnn_AT_all` 0/5 so với C006), dù trên tập Tuning giá trị của Walsh nằm trong khoảng các seed. Dữ liệu, tiền xử lý, kiến trúc và thiết lập huấn luyện đã đối chiếu là giống; khác biệt còn lại lớn nhất là Walsh dùng TensorFlow 2.11 (Keras 2), đề tài dùng TensorFlow 2.21 (Keras 3). Cấu hình `cnn_TA_cal_k2` giống hệt `cnn_TA_cal` nhưng huấn luyện bằng Keras 2 (gói `tf-keras` 2.21.0 trên cùng TensorFlow 2.21, chọn qua `TF_USE_LEGACY_KERAS`), 10 seed; phân tích so sánh hai phiên bản Keras bằng Welch t-test (`keras_comparison` trong `results/step3.json`).
-- Bước tiếp theo: chạy notebook Bước 3 trên Colab (mục 6b: thí nghiệm Keras 2; các mô hình đã xong được bỏ qua), rồi phân tích kết quả.
+- Bước tiếp theo: Bước 4 (giải thích quyết định và kiểm chứng độ trung thực của lời giải thích, mô-đun M5), hoặc khảo sát tài liệu về tính mới trước khi trình giáo sư.
 
 ## Cách chạy
 

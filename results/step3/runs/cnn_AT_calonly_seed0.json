@@ -1,0 +1,59 @@
+{
+  "epochs": 412,
+  "stopped_early": true,
+  "restored_epoch": 362,
+  "restored_monitored_loss": 0.5051685571670532,
+  "min_monitored_epoch": 403,
+  "min_monitored_loss": 0.502454936504364,
+  "train_seconds": 159.5169816017151,
+  "run": "cnn_AT_calonly",
+  "seed": 0,
+  "config": {
+    "model": "cnn",
+    "pretreatment": "AT",
+    "train": "cal",
+    "monitor": "loss",
+    "scaler_fit": "cal"
+  },
+  "feature_version": 2,
+  "n_train": 7413,
+  "n_features": 618,
+  "smoke": false,
+  "environment": {
+    "python": "3.13.16",
+    "tensorflow": "2.21.0",
+    "keras": "3.13.2",
+    "numpy": "2.4.6",
+    "pandas": "2.2.3",
+    "gpu": [
+      "/physical_device:GPU:0"
+    ],
+    "git_commit": "f99661bc2c72afb3a3f4dac13b9e5b6567196e0b"
+  },
+  "quick_metrics": {
+    "Tuning": {
+      "n": 2830,
+      "rmsep": 0.9138782892688039,
+      "bias": -0.12899115633206318,
+      "sep": 0.9048890243224171,
+      "r2": 0.8143087058235455,
+      "r2_pearson": 0.8277168013780406
+    },
+    "Val Ext": {
+      "n": 1448,
+      "rmsep": 0.9166713870815514,
+      "bias": -0.12201252299777711,
+      "sep": 0.9088288052523611,
+      "r2": 0.882005320444779,
+      "r2_pearson": 0.8854322957990969
+    },
+    "Val Ext 2": {
+      "n": 320,
+      "rmsep": 1.2768479503197527,
+      "bias": -0.7309978067874908,
+      "sep": 1.0485316293575229,
+      "r2": 0.4042827695684619,
+      "r2_pearson": 0.6456654408377833
+    }
+  }
+}

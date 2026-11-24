@@ -5,8 +5,8 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 ## Tình trạng hiện tại (24/11/2026)
 
 - Mục đích: **viết bài báo** về hệ thống hỗ trợ ra quyết định thu hoạch xoài từ phổ NIR.
-- Bước 1 (baseline PLS) và Bước 2 (tầng quyết định với PLS) đã chạy, kết quả trong `results/`. Bước 3 (ANN, 1D-CNN) đã chạy lần 1 và lần 2 trên Colab ngày 24/11/2026; CNN của đề tài kém các mô hình đơn lẻ của Walsh ở mùa vụ 4 một cách hệ thống. Thí nghiệm Keras 2 (`cnn_TA_cal_k2`) để kiểm tra nguyên nhân **chưa chạy**. Chi tiết trong `README.md`.
-- Việc tiếp theo: người dùng chạy notebook (mục 6b), giải nén `step3_results.zip` vào thư mục gốc repo; sau đó phân tích, cập nhật README. Người dùng tự chạy lệnh git (commit, push).
+- Bước 1 (baseline PLS) và Bước 2 (tầng quyết định với PLS) đã chạy, kết quả trong `results/`. Bước 3 (ANN, 1D-CNN) đã xong ngày 24/11/2026 (lần 1, lần 2 và thí nghiệm Keras 2), kết quả trong `results/summary.json`, mục `step3`. CNN của đề tài kém các mô hình đơn lẻ của Walsh ở mùa vụ 4 một cách hệ thống (0,06–0,11 %FW); phiên bản Keras không giải thích được, nguyên nhân chưa xác định; người dùng đã đồng ý dừng điều tra và báo cáo trung thực. Mô hình chính dùng Keras 3, tiền xử lý AT bản v2. Chi tiết trong `README.md`.
+- Việc tiếp theo: Bước 4 (XAI và kiểm chứng độ trung thực, M5), hoặc khảo sát tài liệu về tính mới trước khi trình giáo sư. Người dùng tự chạy lệnh git (commit, push).
 
 ## Bối cảnh
 
