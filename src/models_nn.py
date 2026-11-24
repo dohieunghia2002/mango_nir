@@ -52,11 +52,21 @@ def make_callbacks(monitor_val):
     """Without a tuning set the training loss is monitored, with the looser early-stopping delta Walsh used."""
     keras = _keras()
     monitor = 'val_loss' if monitor_val else 'loss'
+
+    class EarlyStoppingKeras211(keras.callbacks.EarlyStopping):
+        """EarlyStopping as in Keras 2.11 (Walsh used TensorFlow 2.11): the best weights are restored only when the
+        patience stops the training; a run that reaches the maximum number of epochs keeps its final weights.
+        Keras 3 restores the best weights in on_train_end in both cases."""
+
+        def on_train_end(self, logs=None):
+            if self.stopped_epoch > 0:
+                super().on_train_end(logs)
+
     return [
         # min_delta 1e-4 is the Keras default, as in Walsh's code (the paper text says 1e-6)
         keras.callbacks.ReduceLROnPlateau(monitor=monitor, patience=25, factor=0.5, min_lr=1e-6, min_delta=1e-4),
-        keras.callbacks.EarlyStopping(monitor=monitor, patience=50, min_delta=1e-5 if monitor_val else 10 ** -2.5,
-                                      restore_best_weights=True),
+        EarlyStoppingKeras211(monitor=monitor, patience=50, min_delta=1e-5 if monitor_val else 10 ** -2.5,
+                              restore_best_weights=True),
     ]
 
 
@@ -73,10 +83,12 @@ def train(kind, X_train, y_train, X_val=None, y_val=None, seed=0, max_epochs=Non
                         validation_data=validation, callbacks=callbacks, shuffle=True, verbose=verbose)
     h = history.history
     monitored = h['val_loss'] if validation is not None else h['loss']
-    restored = int(early_stopping.best_epoch)  # 0-based; Keras 3 restores these weights at the end of training
-    # The restored epoch is the last one that improved the monitored loss by more than min_delta, so it can precede
-    # the epoch of the lowest loss (min_monitored_epoch), by up to the patience when the training loss is monitored.
-    return model, {'epochs': len(h['loss']), 'restored_epoch': restored + 1,
+    stopped_early = early_stopping.stopped_epoch > 0
+    # 0-based epoch whose weights the returned model holds. When stopped early, it is the last epoch that improved the
+    # monitored loss by more than min_delta, i.e. the patience (50) epochs before the stop. It can differ from the
+    # epoch of the lowest monitored loss (min_monitored_epoch) when later epochs improved by less than min_delta.
+    restored = int(early_stopping.best_epoch) if stopped_early else len(monitored) - 1
+    return model, {'epochs': len(h['loss']), 'stopped_early': bool(stopped_early), 'restored_epoch': restored + 1,
                    'restored_monitored_loss': float(monitored[restored]),
                    'min_monitored_epoch': int(np.argmin(monitored)) + 1, 'min_monitored_loss': float(np.min(monitored)),
                    'train_seconds': time.time() - t0}

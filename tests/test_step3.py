@@ -1,5 +1,7 @@
 """Step 3 code that runs without TensorFlow: pretreatments, run configurations and the analysis of saved predictions.
 The analysis is exercised with PLS predictions standing in for network outputs."""
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,8 +11,8 @@ from src.data import DATA_PATH, TARGET, set_masks, wavelength_columns, wavelengt
 from src.models_pls import fit_pls, predict, regression_metrics
 from src.preprocess import augment, preprocess, snv
 from src.step2_decision import evaluate
-from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, load_runs, prediction_interval,
-                                regression_table, summarise_regression)
+from src.step3_analysis import (BENCHMARKS, benchmark_comparison, decision_table, load_runs, missing_runs,
+                                prediction_interval, regression_table, summarise_regression)
 from src.step3_train_nn import EXTRA_SEEDS, FEATURE_VERSION, RUNS, SEEDS, features, plan, run_paths, run_status, supersede
 
 
@@ -81,8 +83,8 @@ def test_analysis_reads_saved_predictions(df, pls_cal_pred, tmp_path):
     for seed in (0, 1):
         pd.DataFrame({'row': np.arange(len(df)), 'pred': pls_cal_pred}).to_csv(
             tmp_path / 'preds' / f'pls_seed{seed}.csv', index=False, float_format='%.5f')
-    runs = load_runs(tmp_path, len(df))
-    assert sorted(runs['pls']) == [0, 1]
+    runs, excluded = load_runs(tmp_path, len(df))
+    assert sorted(runs['pls']) == [0, 1] and excluded == []  # a run name outside RUNS has no version check
     summary = summarise_regression(regression_table(df, runs)).set_index('set')
     m = set_masks(df)['Val Ext']
     expected = regression_metrics(df[TARGET].to_numpy()[m], pls_cal_pred[m])['rmsep']
@@ -111,7 +113,29 @@ def test_stale_runs_are_superseded(tmp_path):
     assert (tmp_path / 'superseded' / 'v1' / 'runs' / meta.name).exists()
     assert run_status(tmp_path, 'cnn_AT_cal', 0, 2) == 'missing'
     # superseded predictions are not picked up by the analysis
-    assert load_runs(tmp_path, 1) == {}
+    assert load_runs(tmp_path, 1) == ({}, [])
+
+
+def test_partial_rerun_never_mixes_feature_versions(tmp_path):
+    """A second Colab run stopped after AT seed 0: seed 0 has v2 features, seed 1 still v1 (stale, not superseded)."""
+    for seed, meta in ((0, {'feature_version': 2}), (1, {})):
+        pred, meta_path = run_paths(tmp_path, 'cnn_AT_cal', seed)
+        pred.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({'row': [0, 1], 'pred': [15.0, 16.0]}).to_csv(pred, index=False)
+        meta_path.write_text(json.dumps(meta))
+    runs, excluded = load_runs(tmp_path, 2)
+    assert sorted(runs['cnn_AT_cal']) == [0] and excluded == ['cnn_AT_cal_seed1']
+    missing = missing_runs(runs)
+    assert 'cnn_AT_cal_seed1' in missing and 'cnn_AT_cal_seed0' not in missing
+    assert len(missing) == len(plan(list(RUNS))) - 1
+
+
+def test_single_seed_comparison_is_valid_json():
+    reg = pd.DataFrame({'run': 'cnn_TA_cal', 'set': 'Val Ext', 'seed': [0], 'rmsep': [0.9], 'bias': [0.0]})
+    c = benchmark_comparison(reg)[0]
+    assert c['within_pi'] is None and c['pi_low'] is None and c['rmsep_sd'] is None
+    json.dumps(c, allow_nan=False)
 
 
 def test_feature_versions_and_plan():

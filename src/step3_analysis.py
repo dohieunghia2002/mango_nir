@@ -3,10 +3,13 @@
 Reads the predictions written by src.step3_train_nn. Light computation: runs locally or at the end of the Colab notebook.
   python -m src.step3_analysis [--runs-dir results/step3]
 Writes results/step3_regression.csv (per run, seed and set), results/step3_decision_metrics.csv (per seed),
-results/step3.json and the 'step3' entry of results/summary.json.
+results/step3.json and the 'step3' entry of results/summary.json. Predictions made with older features are left out.
+If a planned run has no current predictions, the results are still written (marked 'complete': false) and the script
+exits with code 4, so the notebook does not package them as final.
 """
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -16,16 +19,19 @@ from scipy import stats
 from src.data import ROOT, TARGET, load_data, set_masks
 from src.models_pls import regression_metrics
 from src.step2_decision import evaluate_predictions
+from src.step3_train_nn import FEATURE_VERSION, RUNS, plan, run_status
 
 RESULTS = ROOT / 'results'
 DECISION_RUN = 'cnn_AT_calonly'
 EVAL_SETS = ['Tuning', 'Val Ext', 'Val Ext 2']
 EQUIVALENT_TOL = 0.05  # about twice the seed-to-seed SD of RMSEP in Walsh 2024, Table 2 (0.02-0.03 %FW)
 PI_LEVEL = 0.95
+EXIT_INCOMPLETE = 4
 
 # Walsh 2024 models trained like ours: Set partition (KS population), file order, no extra outlier removal,
 # standardised inputs. Values from their Appendix A (Mendeley Data doi:10.17632/mc9jshwb38.1, appendix_a_model_results.xlsx),
-# where each model is a single training run (seed 42; raw_results.csv has one row per configuration).
+# where each model is a single training run (seed 42). In raw_results.csv, A002 and C006 appear twice under two
+# set_split labels with the same training data; their results agree to 1e-15, so Walsh's training was deterministic.
 # Walsh reports bias as mean(true - pred); converted here to our mean(pred - true).
 BENCHMARKS = {
     'ann_S_cal': {'source': 'Walsh 2024, Appendix A, A026 (also Table 5)', 'rmsep': 0.958, 'bias': 0.013},
@@ -47,17 +53,34 @@ def records(table):
 
 
 def load_runs(runs_dir, n_rows):
-    """{run: {seed: per-spectrum predictions}} from <runs_dir>/preds/<run>_seed<k>.csv"""
-    runs = {}
-    for f in sorted((Path(runs_dir) / 'preds').glob('*_seed*.csv')):
+    """({run: {seed: per-spectrum predictions}}, excluded) from <runs_dir>/preds/<run>_seed<k>.csv.
+    Predictions of a configuration in RUNS made with an older feature version (step3_train_nn.FEATURE_VERSION, read
+    from runs/<run>_seed<k>.json) are left out and listed in `excluded`, so a partly re-run set of runs never mixes
+    old and new features."""
+    runs_dir = Path(runs_dir)
+    runs, excluded = {}, []
+    for f in sorted((runs_dir / 'preds').glob('*_seed*.csv')):
         run, seed = f.stem.rsplit('_seed', 1)
+        seed = int(seed)
+        if run in RUNS and run_status(runs_dir, run, seed, FEATURE_VERSION[RUNS[run]['pretreatment']]) == 'stale':
+            excluded.append(f.stem)
+            continue
         p = pd.read_csv(f)
         if len(p) != n_rows:
             raise ValueError(f'{f}: {len(p)} rows, expected {n_rows}')
         pred = np.full(n_rows, np.nan)
         pred[p['row'].to_numpy()] = p['pred'].to_numpy()
-        runs.setdefault(run, {})[int(seed)] = pred
-    return runs
+        runs.setdefault(run, {})[seed] = pred
+    return runs, excluded
+
+
+def missing_runs(runs):
+    """Runs planned by step3_train_nn (all configurations, SEEDS and EXTRA_SEEDS) without current predictions."""
+    return [f'{r}_seed{s}' for r, s in plan(list(RUNS)) if s not in runs.get(r, {})]
+
+
+def finite_or_none(x):
+    return float(x) if np.isfinite(x) else None
 
 
 def regression_table(df, runs):
@@ -95,10 +118,11 @@ def benchmark_comparison(reg):
             continue
         diff = float(v['rmsep'].mean() - b['rmsep'])
         lo, hi = prediction_interval(v['rmsep'])
-        out.append({'run': run, **b, 'rmsep_mean': float(v['rmsep'].mean()), 'rmsep_sd': float(v['rmsep'].std()),
+        has_pi = bool(np.isfinite(lo))  # needs at least 2 seeds
+        out.append({'run': run, **b, 'rmsep_mean': float(v['rmsep'].mean()), 'rmsep_sd': finite_or_none(v['rmsep'].std()),
                     'bias_mean': float(v['bias'].mean()), 'n_seeds': int(v['seed'].nunique()), 'rmsep_diff': diff,
-                    'equivalent': bool(abs(diff) <= EQUIVALENT_TOL), 'pi_low': lo, 'pi_high': hi,
-                    'within_pi': bool(lo <= b['rmsep'] <= hi)})
+                    'equivalent': bool(abs(diff) <= EQUIVALENT_TOL), 'pi_low': finite_or_none(lo),
+                    'pi_high': finite_or_none(hi), 'within_pi': bool(lo <= b['rmsep'] <= hi) if has_pi else None})
     return out
 
 
@@ -122,9 +146,14 @@ def main():
     args = ap.parse_args()
 
     df = load_data()
-    runs = load_runs(args.runs_dir, len(df))
+    runs, excluded = load_runs(args.runs_dir, len(df))
     if not runs:
-        raise SystemExit(f'no predictions found in {args.runs_dir / "preds"}')
+        raise SystemExit(f'no current predictions found in {args.runs_dir / "preds"}')
+    missing = missing_runs(runs)
+    if excluded:
+        print(f'WARNING: {len(excluded)} predictions made with older features are left out: {", ".join(excluded)}')
+    if missing:
+        print(f'WARNING: {len(missing)} planned runs have no current predictions: {", ".join(missing)}')
     reg = regression_table(df, runs)
     summary = summarise_regression(reg)
 
@@ -136,9 +165,10 @@ def main():
     print(f'\nSeason 4 vs comparable Walsh 2024 models (single runs): mean within +-{EQUIVALENT_TOL}, '
           f'and Walsh inside the {PI_LEVEL:.0%} prediction interval of one of our runs:')
     for c in comparison:
-        print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} ({c["n_seeds"]} seeds) vs {c["rmsep"]:.3f} ({c["source"]}), '
-              f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | '
+        pi = ('PI needs 2 seeds' if c['within_pi'] is None else
               f'PI [{c["pi_low"]:.3f}, {c["pi_high"]:.3f}] -> {"TRONG" if c["within_pi"] else "NGOÀI"}')
+        print(f'  {c["run"]:<15} {c["rmsep_mean"]:.3f} ({c["n_seeds"]} seeds) vs {c["rmsep"]:.3f} ({c["source"]}), '
+              f'diff {c["rmsep_diff"]:+.3f} -> {"TƯƠNG ĐƯƠNG" if c["equivalent"] else "KHÁC"} | {pi}')
     print(f'  {REFERENCE_NOTE}')
 
     decision = None
@@ -151,23 +181,32 @@ def main():
             vals = ' | '.join(f'{c} {100 * r[c + "_mean"]:.1f} ({100 * r[c + "_sd"]:.1f})' for c in cols)
             print(f'  {r["set"]:<10} {r["correction"]:<5} q {r["half_width_mean"]:.3f} | {vals}')
         dec.to_csv(RESULTS / 'step3_decision_metrics.csv', index=False)
+    else:  # do not leave the decision metrics of an earlier analysis next to the new results
+        (RESULTS / 'step3_decision_metrics.csv').unlink(missing_ok=True)
 
     reg.to_csv(RESULTS / 'step3_regression.csv', index=False)
-    detail = {'runs': {run: sorted(seeds) for run, seeds in runs.items()}, 'equivalent_tolerance': EQUIVALENT_TOL,
+    detail = {'complete': not missing, 'missing_runs': missing, 'excluded_older_features': excluded,
+              'runs': {run: sorted(seeds) for run, seeds in runs.items()}, 'equivalent_tolerance': EQUIVALENT_TOL,
               'prediction_interval_level': PI_LEVEL,
               'regression_summary': records(summary), 'benchmark_comparison': comparison,
               'reference_note': REFERENCE_NOTE, 'decision_run': DECISION_RUN,
               'decision_summary': None if decision is None else records(decision)}
-    (RESULTS / 'step3.json').write_text(json.dumps(detail, indent=2), encoding='utf-8')
+    # allow_nan=False: a NaN left anywhere fails here instead of writing invalid JSON
+    (RESULTS / 'step3.json').write_text(json.dumps(detail, indent=2, allow_nan=False), encoding='utf-8')
     summary_path = RESULTS / 'summary.json'
     all_summary = json.loads(summary_path.read_text(encoding='utf-8')) if summary_path.exists() else {}
     all_summary['step3'] = {
         'description': 'ANN and 1D-CNN (Walsh 2024 settings) on the fixed Set partition; spectrum-level RMSEP over seeds; '
                        f'decision layer of Step 2 with {DECISION_RUN} (Tuning set unused in training)',
-        **{k: detail[k] for k in ('runs', 'regression_summary', 'benchmark_comparison', 'decision_summary')},
+        **{k: detail[k] for k in ('complete', 'missing_runs', 'runs', 'regression_summary', 'benchmark_comparison',
+                                  'decision_summary')},
     }
+    # the step3 entry was checked for NaN with step3.json above; other steps are written as they were read
     summary_path.write_text(json.dumps(all_summary, indent=2), encoding='utf-8')
     print(f'\nResults written to {RESULTS}')
+    if missing:
+        print(f'INCOMPLETE: {len(missing)} planned runs are missing; these results are not final.')
+        sys.exit(EXIT_INCOMPLETE)
 
 
 if __name__ == '__main__':

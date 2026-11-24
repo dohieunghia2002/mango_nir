@@ -45,15 +45,21 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
 
   Đối chiếu với dữ liệu Walsh công bố (Mendeley `mc9jshwb38`), thực hiện ngày 24/11/2026:
   - Dữ liệu, phân chia Cal/Tuning/Val Ext, thứ tự mẫu, nhãn DM và đặc trưng `S` trùng với của đề tài (11.691 phổ mùa vụ 1–4).
-  - Mỗi mô hình của Walsh là **một lần huấn luyện duy nhất** (seed 42, TensorFlow 2.11): `raw_results.csv` có đúng một dòng cho mỗi cấu hình.
-  - Tiền xử lý AT của Walsh (`mishra&passos_2021_pretreatment_adjusted.csv`) tính SNV trên dải **402–1098 nm** với `ddof=1`; code của Walsh không nêu lý do chọn dải này. Lần chạy 1 tính SNV trên toàn phổ 285–1200 nm, nên các mô hình AT được chạy lại (lần 2). Kết quả AT của lần 1 được giữ trong `results/step3/superseded/v1/`. TA chỉ lệch Walsh một hằng số nhân (√(102/103)), bị bước chuẩn hóa triệt tiêu, nên không chạy lại.
+  - Mỗi mô hình của Walsh là **một lần huấn luyện duy nhất** (seed 42, TensorFlow 2.11). Trong `raw_results.csv`, A002 và C006 xuất hiện hai lần dưới hai nhãn chia tập nhưng cùng dữ liệu huấn luyện, và kết quả trùng nhau đến 1e-15, tức quá trình huấn luyện của Walsh cho kết quả tất định.
+  - Tiền xử lý AT của Walsh (`mishra&passos_2021_pretreatment_adjusted.csv`) tính SNV trên dải **402–1098 nm** với `ddof=1`; code của Walsh không nêu lý do chọn dải này. Lần chạy 1 tính SNV trên toàn phổ 285–1200 nm, nên các mô hình AT được chạy lại (lần 2). Kết quả AT của lần 1 được giữ trong `results/step3/superseded/v1/`.
+  - TA của lần chạy 1 tính SNV với `ddof=0`. Ở 3 khối có SNV, giá trị của Walsh bằng giá trị lần chạy 1 nhân √(102/103); 3 khối còn lại trùng. Hằng số nhân này bị bước chuẩn hóa triệt tiêu (sau chuẩn hóa và ép kiểu float32, 13 trên 7,4 triệu giá trị lệch 1 ulp), nên TA không chạy lại. Các seed 5–19 của `cnn_TA_cal` dùng `ddof=1` nhưng vẫn mang nhãn phiên bản đặc trưng 1.
   - Sau khi sửa, `augment` tái tạo các file TA và AT mùa vụ 5 của Walsh đến sai số làm tròn (test `test_augment_reproduces_walsh_input_files`).
+  - Từ lần chạy 2, EarlyStopping giả lập Keras 2.11 mà Walsh dùng: chỉ khôi phục trọng số tốt nhất khi dừng sớm; mô hình chạy đủ số epoch tối đa giữ trọng số cuối (Keras 3 khôi phục trong cả hai trường hợp). Ở lần chạy 1 không mô hình nào chạy đủ số epoch tối đa, nên hai cách cho cùng kết quả.
 
   Hai tiêu chí so sánh: (1) "tương đương" nếu RMSEP trung bình qua các seed lệch mốc không quá 0,05 %FW, khoảng 2 lần độ lệch chuẩn giữa các seed mà Walsh báo cáo (đặt trước khi chạy); (2) giá trị của Walsh nằm trong khoảng dự đoán 95% cho một lần chạy, tính từ các seed của đề tài (thêm sau lần chạy 1, khi xác nhận mốc của Walsh là lần chạy đơn lẻ). Khi viết bài phải báo cáo cả hai tiêu chí và nêu rõ tiêu chí (2) được thêm sau.
 
   Mốc 0,77 (mùa vụ 4) và 1,18 (mùa vụ 5) trong đặc tả là của mô hình C134. Mô hình này loại thêm 329 phổ ngoại lai theo Mishra & Passos 2021 và chia lại Cal/Tuning ngẫu nhiên theo phổ, nên **không so sánh trực tiếp được** với cách chia tập cố định của đề tài.
 
-  Trong metadata của lần chạy 1 (`results/step3/runs/*.json`), trường `best_epoch` là epoch có loss thấp nhất, **không phải** epoch được EarlyStopping khôi phục; với các cấu hình theo dõi loss huấn luyện (`ann_S_all`, `cnn_AT_all`, `cnn_AT_calonly`) hai epoch này khác nhau. Từ lần chạy 2, metadata ghi `restored_epoch` (epoch được khôi phục) và `min_monitored_epoch`.
+  Trong metadata của lần chạy 1 (`results/step3/runs/*.json`), trường `best_epoch` là epoch có loss thấp nhất, **không phải** epoch được EarlyStopping khôi phục. Khi dừng sớm, epoch được khôi phục là epoch cuối cùng làm loss theo dõi giảm hơn `min_delta`, tức 50 epoch trước khi dừng. Hai epoch này khác nhau khi các epoch sau vẫn giảm loss nhưng ít hơn `min_delta`: thường gặp khi theo dõi loss huấn luyện (`min_delta` 10^-2,5), nhưng cũng có khi theo dõi Tuning (ví dụ `ann_S_cal` seed 0: loss thấp nhất ở epoch 475, khôi phục epoch 469). Từ lần chạy 2, metadata ghi `restored_epoch` (epoch của trọng số được giữ), `stopped_early` và `min_monitored_epoch`.
+
+  Phân tích (`src/step3_analysis.py`) chỉ dùng dự đoán có phiên bản đặc trưng hiện hành, ghi `complete`, `missing_runs` và `excluded_older_features` vào `results/step3.json`, và trả mã lỗi nếu còn thiếu mô hình. Trong notebook, script huấn luyện và phân tích được gọi qua `run_module`, nên khi một script dừng vì hết giờ hoặc vì thiếu mô hình, notebook dừng lại và không đóng gói kết quả chưa đầy đủ.
+
+  CLAUDE.md yêu cầu tiền xử lý trên runtime CPU. Notebook chưa làm vậy: đặc trưng được tính ngay trong phiên GPU, vì chỉ mất vài giây.
 - Bước tiếp theo: chạy lại notebook Bước 3 trên Colab (lần 2: 15 mô hình AT và 15 seed thêm cho `cnn_TA_cal`), rồi phân tích kết quả.
 
 ## Cách chạy

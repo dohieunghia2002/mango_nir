@@ -3,14 +3,18 @@
 Every run saves the predictions for all 12,011 spectra. Finished runs are skipped, so the script can be restarted
 after a Colab disconnect; a finished run whose features have since changed (older FEATURE_VERSION) is moved to
 <out>/superseded/v<version>/ and trained again. Seeds form the outer loop, so a partial run still has every
-configuration for the first seeds. No new run starts after --time-budget-hours, to stay inside a free Colab GPU session.
+configuration for the first seeds. No new run starts after --time-budget-hours, to stay inside a free Colab GPU session;
+the script then exits with code 3, so the notebook stops before analysing an incomplete set of runs.
 
-  python -m src.step3_train_nn --out <dir> [--seeds 0 1 2 3 4] [--runs cnn_AT_calonly ...] [--smoke]
+  python -m src.step3_train_nn --out <dir>                      # all runs: SEEDS, then EXTRA_SEEDS
+  python -m src.step3_train_nn --out <dir> --runs cnn_TA_cal --seeds 5 6   # only these runs and seeds
+  python -m src.step3_train_nn --out <dir> --smoke              # 2 epochs on 1,000 spectra, seed 0
 """
 import argparse
 import json
 import platform
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -28,7 +32,11 @@ SEEDS = (0, 1, 2, 3, 4)
 # Extra seeds run after the main grid: Walsh's results are single runs, so the seed spread of this configuration
 # is estimated more precisely to judge the gap to Walsh's C028.
 EXTRA_SEEDS = {'cnn_TA_cal': tuple(range(5, 20))}
-TIME_BUDGET_HOURS = 4.0  # free Colab GPU sessions last about 5 h; one run takes at most a few minutes
+# Free Colab GPU sessions last about 5 h. The budget counts from the start of this script and is checked before each
+# run, so a run that has started finishes: CNN runs took 1-5 min in the first Colab run, but an ANN run may last up to
+# about 1 h (10,000 epochs at about 0.35 s per epoch).
+TIME_BUDGET_HOURS = 4.0
+EXIT_TIME_BUDGET = 3
 
 # Pretreatments: S = SG 2nd derivative, 17 points, full spectrum then trim (Anderson 2020, 103 variables);
 # TA / AT = six pretreatments concatenated, trimmed before / after pretreating (618 variables). Inputs are always
@@ -46,7 +54,8 @@ RUNS = {
 }
 # Bumped when a pretreatment's features change; runs saved without a version have version 1.
 # AT v2: SNV statistics over 402-1098 nm with ddof=1 (v1: full spectrum, ddof=0).
-# TA keeps v1: its SNV moved from ddof=0 to ddof=1, a constant factor per variable that StandardScaler removes.
+# TA keeps v1: its SNV moved from ddof=0 to ddof=1, a constant factor on the 3 SNV blocks that StandardScaler removes
+# (after scaling and the float32 cast, 13 of 7.4 million inputs differ, by 1 ulp), so TA runs from both are labelled v1.
 FEATURE_VERSION = {'S': 1, 'TA': 1, 'AT': 2}
 
 
@@ -166,8 +175,8 @@ def main():
     for name, seed in plan(args.runs, args.seeds, args.smoke):
         if (time.time() - t0) / 3600 > args.time_budget_hours:
             print(f'Time budget of {args.time_budget_hours} h reached: stopping before {name} seed {seed}. '
-                  'Run the cell again in a new session to continue; finished runs are skipped.')
-            return
+                  'Run the notebook again in a new session to continue; finished runs are skipped.', flush=True)
+            sys.exit(EXIT_TIME_BUDGET)
         run_one(name, RUNS[name], seed, X[RUNS[name]['pretreatment']], df, masks, args.out, env, args.smoke)
     print('All planned runs finished.')
 
