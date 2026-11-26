@@ -140,11 +140,12 @@ Kết quả Bước 3: CNN của đề tài kém các mô hình đơn lẻ của
    - Xác nhận độc lập các phát hiện của [tl1](#tl1) (GC-D, hiệu chỉnh độ lệch bằng k quả) trên cách chia tập cố định của Anderson 2020 và mùa vụ 5, với nhiều cấu hình CNN và nhiều seed. [tl1](#tl1) tự nêu đây là phần cần xác nhận độc lập.
 
 **Việc cần làm:**
-1. **Mã nguồn GC-D và GC-D-BC:** tài liệu bổ sung không có mã. Hai cách:
-   - (a) viết thư hỏi tác giả liên hệ (địa chỉ in trên trang 1 của bài) xin mã và `config/experiment_config.json`;
-   - (b) cài lại theo mục 2.3 và bảng S1, rồi kiểm tra bằng cách tái hiện một số con số của họ (ví dụ độ phủ GC-D 0,895 cho kịch bản bỏ một mùa vụ). Cách này cần file v4 của bộ dữ liệu (260 MB), vì họ dùng file v4.
+1. **Mã nguồn GC-D và GC-D-BC: đã xong (26/11/2026).** Tài liệu bổ sung không có mã, nên đề tài tự cài lại theo mục 2.3 và bảng S1 (`src/group_conformal.py`). Bản cài được kiểm tra bằng cách tái hiện kịch bản bỏ một mùa vụ trên file v4 (`results/gcd_verification*.json`).
+   - Độ phủ khớp trong ±0,01: GC-D 0,890 so với 0,895, SCP 0,824 so với 0,826.
+   - Phải tìm A ≤ 19 (dù bảng S1 ghi 20) và dùng RMSE cân bằng theo nhóm cho ASTM-G.
+   - Interval score thấp hơn bài 1–3%, nguyên nhân chưa rõ.
 
-   Có thể làm song song: gửi thư trước, cài lại trong lúc chờ.
+   Chi tiết trong `README.md`.
 2. **Thêm đối chứng vào tầng quyết định:**
    - GC-D thay cho conformal hiệu chỉnh trên Tuning. Cách chia tập cố định chỉ có 3 mùa vụ huấn luyện, nên nhóm có thể là quần thể; điều này cần thiết kế trước khi chạy.
    - GC-D-BC thay cho cách dịch tâm hiện tại.

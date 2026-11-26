@@ -6,7 +6,9 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 
 - Mục đích: **viết bài báo** về hệ thống hỗ trợ ra quyết định thu hoạch xoài từ phổ NIR.
 - Bước 1 (baseline PLS) và Bước 2 (tầng quyết định với PLS) đã chạy, kết quả trong `results/`. Bước 3 (ANN, 1D-CNN) đã xong ngày 24/11/2026 (lần 1, lần 2 và thí nghiệm Keras 2), kết quả trong `results/summary.json`, mục `step3`. CNN của đề tài kém các mô hình đơn lẻ của Walsh ở mùa vụ 4 một cách hệ thống (0,06–0,11 %FW); phiên bản Keras không giải thích được, nguyên nhân chưa xác định; người dùng đã đồng ý dừng điều tra và báo cáo trung thực. Mô hình chính dùng Keras 3, tiền xử lý AT bản v2. Chi tiết trong `README.md`.
-- Việc tiếp theo: Bước 4 (XAI và kiểm chứng độ trung thực, M5), hoặc khảo sát tài liệu về tính mới trước khi trình giáo sư. Người dùng tự chạy lệnh git (commit, push).
+- Khảo sát tài liệu về tính mới đã xong (`docs/literature_novelty_review.md`).
+- GC-D và GC-D-BC (Bhargav Teja & Divya Meena 2026) đã được cài lại trong `src/group_conformal.py` và kiểm tra ngày 26/11/2026 bằng cách tái hiện số liệu của bài trên file v4 (`scripts/verify_gcd_talanta.py`, `results/gcd_verification*.json`). Độ phủ khớp ±0,01 khi tìm A ≤ 19 và ASTM-G dùng RMSE cân bằng theo nhóm (mặc định của mô-đun). Interval score thấp hơn bài 1–3%, nguyên nhân chưa rõ.
+- Việc tiếp theo: dùng GC-D/GC-D-BC làm đối chứng trong tầng quyết định trên file v3 (cần thiết kế trước cách chọn nhóm: mùa vụ hay quần thể); Bước 4 (XAI và kiểm chứng độ trung thực, M5). Người dùng tự chạy lệnh git (commit, push).
 
 ## Bối cảnh
 
@@ -31,6 +33,7 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 ## Dữ liệu và mã nguồn
 
 - Dữ liệu: `data/MangoDMC_NIR_Data_v3.csv` (12.011 phổ × 315 cột). Chỉ dùng file v3, không dùng v4 ở giai đoạn này. Giữ nguyên phân chia có sẵn trong cột `Set`, **không chia ngẫu nhiên**.
+- **Ngoại lệ (người dùng đồng ý ngày 26/11/2026):** file v4 (`data/MangoDMC_NIR_Data_v4.csv`, cùng bộ Mendeley) chỉ được dùng để **kiểm tra bản cài lại GC-D**, bằng cách tái hiện con số của Bhargav Teja & Divya Meena (2026), vốn dùng file v4. Không dùng v4 cho kết quả của đề tài.
 - Mỗi quả được quét 2–2,6 lần và file không có mã quả. Tạo mã quả bằng `groupby(['Set','Pop','Type','Cultivar','DM'])`. RMSEP tính theo phổ (như bài gốc); quyết định đưa ra theo quả (trung bình dự đoán các phổ của quả).
 - `scripts/pilot_dss.py` là pilot ban đầu (PLS và tầng quyết định), dùng làm tham chiếu. Mã chính viết trong `src/` theo cấu trúc ở mục 6 của đặc tả. Chạy từ thư mục gốc repo bằng Python của venv: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m src.step1_baseline`. **Chỉ cài thư viện vào `.venv/`** (tạo từ `requirements.txt`, phiên bản cố định), không cài vào Python chung của máy; thư viện mới phải thêm vào `requirements.txt` đúng phiên bản đã dùng. Khi console Windows báo lỗi mã hóa tiếng Việt, đặt `PYTHONIOENCODING=utf-8`.
 - Ngưỡng conformal q dùng định nghĩa chuẩn: giá trị thứ ⌈(n+1)(1−α)⌉ khi xếp |phần dư| của các quả tập Tuning theo thứ tự tăng dần. Pilot dùng `np.quantile` có nội suy, nên ở mùa vụ 5, T = 15 có đúng 1 quả cho kết quả khác. Test `test_step2_with_pilot_quantile_matches_pilot_exactly` chứng minh đó là khác biệt duy nhất.

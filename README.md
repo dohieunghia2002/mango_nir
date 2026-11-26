@@ -112,7 +112,25 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
   Phân tích (`src/step3_analysis.py`) chỉ dùng dự đoán có phiên bản đặc trưng hiện hành, ghi `complete`, `missing_runs` và `excluded_older_features` vào `results/step3.json`, và trả mã lỗi nếu còn thiếu mô hình. Trong notebook, script huấn luyện và phân tích được gọi qua `run_module`, nên khi một script dừng vì hết giờ hoặc vì thiếu mô hình, notebook dừng lại và không đóng gói kết quả chưa đầy đủ.
 
   CLAUDE.md yêu cầu tiền xử lý trên runtime CPU. Notebook chưa làm vậy: đặc trưng được tính ngay trong phiên GPU, vì chỉ mất vài giây.
-- Bước tiếp theo: Bước 4 (giải thích quyết định và kiểm chứng độ trung thực của lời giải thích, mô-đun M5), hoặc khảo sát tài liệu về tính mới trước khi trình giáo sư.
+- **Khảo sát tài liệu về tính mới đã xong (24/11/2026):** xem `docs/literature_novelty_review.md`.
+- **Cài lại GC-D (26/11/2026).** Phương pháp group-conformal calibration (GC-D) và biến thể hiệu chỉnh độ lệch GC-D-BC của Bhargav Teja & Divya Meena (2026, *Talanta* 314:130941) được cài lại trong `src/group_conformal.py` theo mục 2.3, mục 4.8 và bảng S1, S22 của bài, vì bài không công bố mã nguồn. Những chỗ bài không nói rõ được đánh dấu `ASSUMPTION` trong code.
+  - **Test:** bản cài cho cùng kết quả với một bản cài độc lập (PLS khớp lại cho từng A, T²/Q từ `SpectralOOD`, GLM bằng IRLS tự viết), xem `tests/test_group_conformal.py`.
+  - **Kiểm tra trên dữ liệu thật:** tái hiện kịch bản bỏ một mùa vụ của bài trên file v4, đúng dữ liệu bài dùng (85.401 phổ, 10.560 quả, 7 mùa vụ). Chạy bằng `scripts/verify_gcd_talanta.py`, kết quả trong `results/gcd_verification.json` (A ≤ 20, theo bảng S1) và `results/gcd_verification_amax19.json` (A ≤ 19). Độ phủ trung bình theo mùa vụ ở mức danh nghĩa 0,90:
+
+| | Bài báo | A ≤ 20 | A ≤ 19 |
+|---|---|---|---|
+| GC-D | 0,895 | 0,893 | 0,890 |
+| SCP (5 seed) | 0,826 | 0,820 | 0,824 |
+| G-W-A | 0,90 | 0,898 | 0,894 |
+| ASTM-G | 0,906 | 0,880 (RMSE đều theo phổ) | 0,899 (RMSE cân bằng theo nhóm) |
+| Số thành phần PLS | 12–19 | 12–20 | 12–19 |
+
+  Độ phủ khớp trong dung sai ±0,01 đã đặt trước. Có hai điểm phải điều chỉnh so với cách đọc ban đầu, đều do bài mô tả không rõ:
+  - Khoảng số thành phần 12–19 của bài chỉ tái hiện được khi tìm A ≤ 19, dù bảng S1 ghi A_max = 20.
+  - ASTM-G của bài dùng RMSE cân bằng theo nhóm.
+
+  Mặc định trong `src/group_conformal.py` theo hai điểm này. Interval score vẫn thấp hơn bài: GC-D 5,85 so với 5,90; SCP 6,23 so với 6,43; ASTM-G 5,98 so với 6,18 (với A ≤ 19). Khi chưa có mã gốc, nguyên nhân chưa xác định được; nghi vấn cho SCP là cách lấy tâm khoảng. File v4 chỉ dùng cho phép kiểm tra này, không dùng cho kết quả của đề tài.
+- Bước tiếp theo: dùng GC-D và GC-D-BC làm đối chứng trong tầng quyết định (trên file v3); Bước 4 (giải thích quyết định và kiểm chứng độ trung thực của lời giải thích, mô-đun M5).
 
 ## Cách chạy
 
@@ -147,6 +165,8 @@ Sau đó chạy bằng Python của venv:
 | `docs/literature_novelty_review.md` | Khảo sát tài liệu về tính mới (24/11/2026): các bài đã làm trước, mức độ mới của từng điểm đóng góp, việc cần làm |
 | `docs/*.pdf` | Bài báo gốc Anderson 2020 (`1-s2.0-S0925521420301629-main.pdf`), bài Walsh 2024 và luận văn của Walsh (chỉ có trên máy, không commit) |
 | `scripts/pilot_dss.py` | Pilot ban đầu, dùng làm tham chiếu |
+| `scripts/verify_gcd_talanta.py` | Kiểm tra bản cài lại GC-D bằng cách tái hiện số liệu của Bhargav Teja & Divya Meena (2026) trên file v4 |
+| `src/group_conformal.py` | Cài lại GC-D và GC-D-BC (group-conformal calibration theo chẩn đoán PLS), cùng các đối chứng SCP và ASTM-G |
 | `src/data.py` | Đọc dữ liệu, tạo mã quả, kiểm tra số phổ và số quả của từng tập |
 | `src/preprocess.py` | M1: tiền xử lý phổ (Savitzky–Golay trên toàn phổ, cắt 684–990 nm; tùy chọn SNV; tăng cường phổ 6 dạng cho CNN) |
 | `src/models_pls.py` | M2: mô hình PLS và các chỉ số RMSEP, bias, SEP, R² |
@@ -164,6 +184,7 @@ Sau đó chạy bằng Python của venv:
 - **Mango DMC and NIR spectra**, Anderson, Walsh, Subedi, Walsh. Mendeley Data, doi:[10.17632/46htwnp833](https://doi.org/10.17632/46htwnp833) (bản v5), giấy phép CC BY 4.0.
 - Bài báo gốc: Anderson et al. (2020), *Postharvest Biology and Technology* 168:111202 (xem mục Tài liệu tham khảo).
 - File dùng: `MangoDMC_NIR_Data_v3.csv`, gồm 12.011 phổ và 315 cột (9 cột thông tin, nhãn `DM`, 306 cột phổ hấp thụ 285–1200 nm, bước 3 nm). Tải bộ dữ liệu từ Mendeley Data và đặt file này vào `data/`.
+- Chỉ để kiểm tra bản cài lại GC-D: file `MangoDMC_NIR_Data_v4.csv` (260 MB) của cùng bộ dữ liệu Mendeley, đặt vào `data/`. Không dùng cho kết quả của đề tài.
 - Không bắt buộc, chỉ để kiểm tra tiền xử lý: file đầu vào mùa vụ 5 đã tiền xử lý của Walsh 2024 (Mendeley Data doi:[10.17632/mc9jshwb38.1](https://doi.org/10.17632/mc9jshwb38.1), thư mục `input/season_5`). Đặt `mishra&passos_2021_pretreatment.csv` và `mishra&passos_2021_pretreatment_adjusted.csv` vào `data/` với tên `Walsh2024_season5_mishra_pretreatment.csv` và `Walsh2024_season5_mishra_pretreatment_adjusted.csv`. Thiếu hai file này thì test tương ứng được bỏ qua. Không dùng chúng để huấn luyện.
 - Phân chia có sẵn trong cột `Set`: `Cal`, `Tuning` (huấn luyện); `Val Ext` (mùa vụ 4); `Val Ext 2` (mùa vụ 5). Không chia ngẫu nhiên.
 

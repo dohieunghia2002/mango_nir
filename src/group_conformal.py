@@ -26,7 +26,9 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import PoissonRegressor
 
-A_MAX = 20          # Table S1, mango
+# Table S1 lists A_max = 20 for mango, but the published range of selected latent variables (12-19, Table 1) is only
+# reproduced when A is searched up to 19 (with 20 allowed, 5 of 7 seasons select 20): results/gcd_verification*.json.
+A_MAX = 19
 FLOOR_FRAC = 0.1    # Table S1, scale_model.floor_frac
 
 
@@ -253,11 +255,13 @@ def split_conformal(X, y, units, A, alpha=0.1, frac=0.25, seed=0):
     return float(r[min(k, len(r)) - 1])
 
 
-def astm_group_interval(gc, X, alpha=0.1):
+def astm_group_interval(gc, X, alpha=0.1, rmse_weights='group'):
     """ASTM-G baseline: yhat -/+ t * RMSECV_group * sqrt(1 + h), with the RMSE of the out-of-group residuals of a fitted
-    GroupConformal and the leverage h of the final model. ASSUMPTIONS: unweighted RMSE over all calibration spectra;
-    t quantile with n - A - 1 degrees of freedom."""
-    rmse = float(np.sqrt(np.mean(gc.resid ** 2)))
+    GroupConformal and the leverage h of the final model. The RMSE uses the group-balanced weights 1/(K N_g) that select
+    A (rmse_weights='group'): this reproduces the published coverage (0.899 vs 0.906 for new mango seasons), equal
+    weights per spectrum ('spectra') do not (0.875). ASSUMPTION: t quantile with n - A - 1 degrees of freedom."""
+    w = group_weights(gc.groups) if rmse_weights == 'group' else np.full(len(gc.resid), 1.0 / len(gc.resid))
+    rmse = float(np.sqrt(np.sum(w * gc.resid ** 2)))
     tq = stats.t.ppf(1 - alpha / 2, gc.final.n_train - gc.A - 1)
     yhat = gc.final.predict(X, gc.A)
     half = tq * rmse * np.sqrt(1 + gc.final.leverage(X, gc.A))

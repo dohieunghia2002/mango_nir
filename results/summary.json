@@ -1878,5 +1878,226 @@
         ]
       }
     }
+  },
+  "gcd_verification": {
+    "description": "Check of the GC-D re-implementation on the v4 file, leave-one-season-out, vs Talanta 314:130941",
+    "alpha": 0.1,
+    "tolerance_coverage": 0.01,
+    "summary": {
+      "GC-D": {
+        "coverage": 0.8929669010774578,
+        "interval_score": 5.768051904216321,
+        "width": 4.314848910451643,
+        "min_season_coverage": 0.7694503925767309
+      },
+      "SCP": {
+        "coverage": 0.8197500480096535,
+        "interval_score": 6.1760997646613465,
+        "width": 3.46636063286842,
+        "min_season_coverage": 0.6897573162027124
+      },
+      "ASTM-G": {
+        "coverage": 0.8799029842803456,
+        "interval_score": 5.9217350451879724,
+        "width": 4.109538535382638,
+        "min_season_coverage": 0.7608850820842256
+      },
+      "G-W-A": {
+        "coverage": 0.8978586989933717,
+        "interval_score": 5.899333879494489,
+        "width": 4.361159865156505,
+        "min_season_coverage": 0.7774803711634547
+      }
+    },
+    "comparison": [
+      {
+        "method": "GC-D",
+        "metric": "coverage",
+        "published": 0.895,
+        "ours": 0.8929669010774578,
+        "diff": -0.0020330989225422202,
+        "match": true
+      },
+      {
+        "method": "GC-D",
+        "metric": "interval_score",
+        "published": 5.9,
+        "ours": 5.768051904216321,
+        "diff": -0.13194809578367916,
+        "match": null
+      },
+      {
+        "method": "SCP",
+        "metric": "coverage",
+        "published": 0.826,
+        "ours": 0.8197500480096535,
+        "diff": -0.006249951990346503,
+        "match": true
+      },
+      {
+        "method": "SCP",
+        "metric": "interval_score",
+        "published": 6.43,
+        "ours": 6.1760997646613465,
+        "diff": -0.25390023533865325,
+        "match": null
+      },
+      {
+        "method": "ASTM-G",
+        "metric": "coverage",
+        "published": 0.906,
+        "ours": 0.8799029842803456,
+        "diff": -0.026097015719654393,
+        "match": false
+      },
+      {
+        "method": "ASTM-G",
+        "metric": "interval_score",
+        "published": 6.18,
+        "ours": 5.9217350451879724,
+        "diff": -0.25826495481202727,
+        "match": null
+      },
+      {
+        "method": "G-W-A",
+        "metric": "coverage",
+        "published": 0.9,
+        "ours": 0.8978586989933717,
+        "diff": -0.002141301006628349,
+        "match": true
+      },
+      {
+        "method": "PLS",
+        "metric": "latent variables",
+        "published": [
+          12,
+          19
+        ],
+        "ours": [
+          12,
+          20
+        ],
+        "diff": null,
+        "match": false
+      }
+    ]
+  },
+  "gcd_verification_amax19": {
+    "description": "Check of the GC-D re-implementation on the v4 file, leave-one-season-out, vs Talanta 314:130941",
+    "a_max": 19,
+    "alpha": 0.1,
+    "tolerance_coverage": 0.01,
+    "summary": {
+      "GC-D": {
+        "coverage": 0.889970500820544,
+        "interval_score": 5.848190502602436,
+        "width": 4.362177886382323,
+        "min_season_coverage": 0.7639186295503212
+      },
+      "SCP": {
+        "coverage": 0.82370790322819,
+        "interval_score": 6.228363561460229,
+        "width": 3.5712925619687925,
+        "min_season_coverage": 0.6819414703783011
+      },
+      "ASTM-G": {
+        "coverage": 0.8749224561285442,
+        "interval_score": 5.993775061618221,
+        "width": 4.123944012745207,
+        "min_season_coverage": 0.7526766595289079
+      },
+      "G-W-A": {
+        "coverage": 0.8937217683901026,
+        "interval_score": 5.97007350553009,
+        "width": 4.389195954704804,
+        "min_season_coverage": 0.7746252676659529
+      },
+      "ASTM-G-groupRMSE": {
+        "coverage": 0.8989616072082048,
+        "interval_score": 5.97518032437867,
+        "width": 4.4722503925420085,
+        "min_season_coverage": 0.7785510349750179
+      }
+    },
+    "comparison": [
+      {
+        "method": "GC-D",
+        "metric": "coverage",
+        "published": 0.895,
+        "ours": 0.889970500820544,
+        "diff": -0.005029499179456054,
+        "match": true
+      },
+      {
+        "method": "GC-D",
+        "metric": "interval_score",
+        "published": 5.9,
+        "ours": 5.848190502602436,
+        "diff": -0.051809497397564463,
+        "match": null
+      },
+      {
+        "method": "SCP",
+        "metric": "coverage",
+        "published": 0.826,
+        "ours": 0.82370790322819,
+        "diff": -0.0022920967718099705,
+        "match": true
+      },
+      {
+        "method": "SCP",
+        "metric": "interval_score",
+        "published": 6.43,
+        "ours": 6.228363561460229,
+        "diff": -0.20163643853977042,
+        "match": null
+      },
+      {
+        "method": "ASTM-G",
+        "metric": "coverage",
+        "published": 0.906,
+        "ours": 0.8749224561285442,
+        "diff": -0.03107754387145578,
+        "match": false
+      },
+      {
+        "method": "ASTM-G",
+        "metric": "interval_score",
+        "published": 6.18,
+        "ours": 5.993775061618221,
+        "diff": -0.18622493838177867,
+        "match": null
+      },
+      {
+        "method": "G-W-A",
+        "metric": "coverage",
+        "published": 0.9,
+        "ours": 0.8937217683901026,
+        "diff": -0.006278231609897378,
+        "match": true
+      },
+      {
+        "method": "ASTM-G-groupRMSE",
+        "metric": "coverage",
+        "published": 0.906,
+        "ours": 0.8989616072082048,
+        "diff": -0.007038392791795189,
+        "match": true
+      },
+      {
+        "method": "PLS",
+        "metric": "latent variables",
+        "published": [
+          12,
+          19
+        ],
+        "ours": [
+          12,
+          19
+        ],
+        "diff": null,
+        "match": true
+      }
+    ]
   }
 }
