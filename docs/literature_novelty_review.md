@@ -112,7 +112,12 @@
 - **Đã có khuyến nghị kiểm chứng độ trung thực bằng nhiễu loạn hoặc xóa vùng phổ** ([Passos, 2026](#tl6); [Kalatzis & Nega, 2026](#tl17)) và cách gộp bước sóng thành vùng ([Contreras et al., 2024](#tl18)), nhưng các bài này chưa áp dụng cho quyết định.
 - **Giải thích vì sao mô hình từ chối** đã có trong học máy nói chung ([Artelt et al., 2022](#tl19); [Artelt et al., 2023](#tl20)), chưa thấy cho phổ NIR.
 - **[tl1](#tl1) không có XAI.** Ở cuộc tìm này chưa thấy bài nào giải thích từng quyết định thu hoạch (kể cả "chưa quyết": khoảng cách tới ngưỡng, độ rộng khoảng, cờ phổ bất thường hay lệch lô, vùng bước sóng đóng góp) và kiểm chứng rằng che các vùng được cho là quan trọng làm **quyết định** thay đổi nhiều hơn so với che vùng ngẫu nhiên.
-- **Chưa có kết quả.** Kết quả kiểm chứng có thể âm tính và phải được báo cáo như vậy.
+- **Kết quả với PLS (Bước 4a, 26/11/2026, xem `README.md`):**
+  - Lời giải thích là phân tách chính xác của mô hình, nên trung thực theo cấu tạo so với mốc trung bình.
+  - Độ ổn định giữa các lần quét của cùng một quả tốt.
+  - Phép kiểm tra xóa bằng nội suy không đo được độ trung thực, vì phổ sau khi xóa nằm ngoài miền dữ liệu.
+  - Bài báo cần nêu rõ điểm phương pháp này: với mô hình tuyến tính, kiểm tra xóa thành vòng tròn nếu dùng đúng mốc của lời giải thích, và vô nghĩa nếu đưa phổ ra ngoài miền dữ liệu.
+- **Kiểm chứng độ trung thực với CNN (Bước 4b): chưa có kết quả.** Kết quả có thể âm tính và phải được báo cáo như vậy.
 
 ### 4.4. Đánh giá ở mức quyết định — mức độ mới: thấp
 
@@ -146,12 +151,10 @@ Kết quả Bước 3: CNN của đề tài kém các mô hình đơn lẻ của
    - Interval score thấp hơn bài 1–3%, nguyên nhân chưa rõ.
 
    Chi tiết trong `README.md`.
-2. **Thêm đối chứng vào tầng quyết định:**
-   - GC-D thay cho conformal hiệu chỉnh trên Tuning. Cách chia tập cố định chỉ có 3 mùa vụ huấn luyện, nên nhóm có thể là quần thể; điều này cần thiết kế trước khi chạy.
-   - GC-D-BC thay cho cách dịch tâm hiện tại.
-   - Anchoring của [tl2](#tl2).
-
-   Đây là tính toán nhẹ với PLS. Với CNN, việc tính phần dư ngoài nhóm cần huấn luyện lại theo nhóm trên Colab.
+2. **Thêm đối chứng vào tầng quyết định:** GC-D và GC-D-BC đã xong với PLS (Bước 2b, 26/11/2026, xem `README.md`).
+   - Kết quả: cùng mô hình dự đoán, GC-D đánh đổi tỉ lệ tự quyết để lấy độ phủ.
+   - Có hiệu chỉnh lô bằng k = 5 quả, cách làm của đề tài tương đương GC-D-BC nhóm theo mùa.
+   - Còn lại: anchoring của [tl2](#tl2); làm với CNN, vì cần huấn luyện lại theo nhóm trên Colab.
 3. **Bước 4 (XAI và kiểm chứng độ trung thực):** ưu tiên cao nhất vì là đóng góp chính.
 4. **Mô-đun chi phí M4:** chọn ngưỡng "chưa quyết" theo chi phí, nối tiếp phân tích tỉ lệ chi phí c của [tl1](#tl1). Cần giá trị chi phí có nguồn trích dẫn.
 5. **Khi viết bài:** trích dẫn [tl1](#tl1) và [tl2](#tl2) trong phần tổng quan và phần phương pháp, nêu rõ đề tài dùng lại phần nào và khác ở đâu.

@@ -8,7 +8,19 @@ Hướng dẫn cho Claude Code khi làm việc với repo này. Người dùng c
 - Bước 1 (baseline PLS) và Bước 2 (tầng quyết định với PLS) đã chạy, kết quả trong `results/`. Bước 3 (ANN, 1D-CNN) đã xong ngày 24/11/2026 (lần 1, lần 2 và thí nghiệm Keras 2), kết quả trong `results/summary.json`, mục `step3`. CNN của đề tài kém các mô hình đơn lẻ của Walsh ở mùa vụ 4 một cách hệ thống (0,06–0,11 %FW); phiên bản Keras không giải thích được, nguyên nhân chưa xác định; người dùng đã đồng ý dừng điều tra và báo cáo trung thực. Mô hình chính dùng Keras 3, tiền xử lý AT bản v2. Chi tiết trong `README.md`.
 - Khảo sát tài liệu về tính mới đã xong (`docs/literature_novelty_review.md`).
 - GC-D và GC-D-BC (Bhargav Teja & Divya Meena 2026) đã được cài lại trong `src/group_conformal.py` và kiểm tra ngày 26/11/2026 bằng cách tái hiện số liệu của bài trên file v4 (`scripts/verify_gcd_talanta.py`, `results/gcd_verification*.json`). Độ phủ khớp ±0,01 khi tìm A ≤ 19 và ASTM-G dùng RMSE cân bằng theo nhóm (mặc định của mô-đun). Interval score thấp hơn bài 1–3%, nguyên nhân chưa rõ.
-- Việc tiếp theo: dùng GC-D/GC-D-BC làm đối chứng trong tầng quyết định trên file v3 (cần thiết kế trước cách chọn nhóm: mùa vụ hay quần thể); Bước 4 (XAI và kiểm chứng độ trung thực, M5). Người dùng tự chạy lệnh git (commit, push).
+- Bước 2b (26/11/2026, `src/step2_gcd_baseline.py`, mục `step2_gcd` trong `summary.json`): GC-D/GC-D-BC làm đối chứng trong tầng quyết định trên file v3.
+  - **Thiết kế:** hiệu chỉnh theo quả; nhóm theo mùa (chính) và theo quần thể (độ nhạy); cùng các lần rút k quả như Bước 2.
+  - **Nhánh `A=11`:** mọi phương pháp dùng chung mô hình Bước 1, để tách ảnh hưởng của mô hình dự đoán.
+  - **Kết luận:**
+    - Mô hình dự đoán ảnh hưởng lớn khi không hiệu chỉnh lô.
+    - Cùng mô hình, GC-D đánh đổi tỉ lệ tự quyết để lấy độ phủ.
+    - Có hiệu chỉnh lô k = 5, cách làm của Bước 2 tương đương GC-D-BC nhóm theo mùa.
+  - Chi tiết trong README.
+- Bước 4a (26/11/2026, `src/explain.py`, `src/step4_explain.py`, mục `step4` trong `summary.json`): giải thích quyết định với PLS.
+  - **Kết quả đã đăng ký trước:** độ ổn định tốt; cờ Q/T² không bật cho quả nào. Kiểm tra xóa bằng nội suy (phép kiểm tra chính) không phân biệt được dải quan trọng với dải ngẫu nhiên, vì phép xóa đưa phổ ra ngoài miền dữ liệu (phân tích cơ chế làm sau, mục `post_hoc_interp_mechanism`).
+  - **Định vị lại (người dùng đồng ý):** với PLS, lời giải thích là phân tách chính xác; điểm được kiểm chứng là độ ổn định. Kiểm chứng độ trung thực chuyển sang CNN ở Bước 4b (Colab).
+- Bước 4b (thiết kế đã duyệt 26/11/2026): code và notebook sẵn sàng (`src/explain_nn.py`, `src/step4b_explain_cnn.py`, `notebooks/colab_explain_cnn.ipynb`), **chưa chạy**. Notebook lấy code từ GitHub, nên người dùng phải push trước khi chạy. Sau khi giải nén `step4b_results.zip`, chạy `.venv/Scripts/python -m src.step4b_explain_cnn --summary-only` để ghi mục `step4b` vào `summary.json`. Không đưa `summary.json` vào file zip, để tránh ghi đè các mục chưa commit. Biện pháp an toàn (27/11/2026): script dừng khi phiên không có GPU (mã 5), khi dự đoán lệch Bước 3 quá 1e-4 %FW (mã 4: người dùng gửi output để quyết định; chạy tiếp bằng `ACCEPT_STEP3_MISMATCH = True`) và khi đã chạy quá 4 giờ (mã 3).
+- Việc tiếp theo: người dùng chạy Bước 4b trên Colab; sau đó phân tích kết quả, rồi mô-đun chi phí M4 (cần giá trị chi phí có nguồn trích dẫn). Người dùng tự chạy lệnh git (commit, push); chỉ đưa lệnh git khi người dùng yêu cầu.
 
 ## Bối cảnh
 

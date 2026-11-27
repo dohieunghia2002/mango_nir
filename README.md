@@ -130,7 +130,138 @@ Hệ thống nhận phổ NIR của một quả, dự đoán DMC, rồi đưa ra
   - ASTM-G của bài dùng RMSE cân bằng theo nhóm.
 
   Mặc định trong `src/group_conformal.py` theo hai điểm này. Interval score vẫn thấp hơn bài: GC-D 5,85 so với 5,90; SCP 6,23 so với 6,43; ASTM-G 5,98 so với 6,18 (với A ≤ 19). Khi chưa có mã gốc, nguyên nhân chưa xác định được; nghi vấn cho SCP là cách lấy tâm khoảng. File v4 chỉ dùng cho phép kiểm tra này, không dùng cho kết quả của đề tài.
-- Bước tiếp theo: dùng GC-D và GC-D-BC làm đối chứng trong tầng quyết định (trên file v3); Bước 4 (giải thích quyết định và kiểm chứng độ trung thực của lời giải thích, mô-đun M5).
+- **Bước 2b: GC-D và GC-D-BC làm đối chứng cho tầng quyết định (26/11/2026).** Script `src/step2_gcd_baseline.py`; kết quả trong `results/step2_gcd_decision_metrics.csv`, `results/step2_gcd.json` và mục `step2_gcd` của `results/summary.json`. Thiết kế cố định trước khi chạy:
+  - **Nhóm hiệu chỉnh:** mùa vụ (phân tích chính, 3 mùa của Cal + Tuning) và quần thể (phân tích độ nhạy, 94 quần thể, 10 fold).
+  - **Hiệu chỉnh theo quả:** đây là điều chỉnh của đề tài, vì bài gốc hiệu chỉnh theo phổ. Phần dư ngoài nhóm, T² và Q được lấy trung bình theo quả; trọng số là 1/(K × số quả của nhóm).
+  - **GC-D-BC:** mô phỏng việc hiệu chỉnh theo từng quần thể bên trong mỗi mùa. Khi đánh giá, dùng **đúng các lần rút k quả của Bước 2**, nên các dòng so sánh được theo cặp. Test `test_pipeline_reproduces_step2_rows` chứng minh pipeline tái tạo đủ 228 giá trị của Bước 2.
+  - **Hai nhánh mô hình dự đoán:**
+    - `selected`: PLS khớp trên Cal + Tuning, số thành phần chọn bằng kiểm định chéo theo nhóm (A = 13 khi nhóm theo mùa, 18 khi nhóm theo quần thể).
+    - `A=11`: **một mô hình chung cho mọi phương pháp**, là PLS 11 thành phần trên Cal + Tuning (mô hình Bước 1). Cách hiệu chỉnh "kiểu Bước 2" dùng q của Bước 2 (từ tập Tuning, mô hình khớp trên Cal), nhưng lấy tâm theo mô hình chung, như bài *Talanta* làm với SCP.
+  - **Chỉ làm cho PLS:** làm cho CNN thì cần huấn luyện lại theo từng fold trên Colab.
+
+  Kết quả ở T = 15 %FW. Từ dòng thứ hai trở đi, mọi phương pháp dùng mô hình chung `A=11`. Đơn vị %, trong ngoặc là độ lệch chuẩn qua 30 lần lặp.
+
+  **Mùa vụ 5:**
+
+| Cách hiệu chỉnh khoảng | Nửa độ rộng TB (%FW) | Độ phủ 90% | Tự quyết | Đúng / quả tự quyết | Báo "đủ chín" sai / quả tự quyết |
+|---|---|---|---|---|---|
+| *Không hiệu chỉnh lô* | | | | | |
+| Bước 2 gốc (PLS chỉ khớp trên Cal) | 1,26 | 18,8 | 46,9 | 72,0 | 0,0 |
+| Kiểu Bước 2 (Tuning) | 1,26 | 43,8 | 38,8 | 79,0 | 0,0 |
+| GC-D, nhóm theo mùa | 2,10 | 76,2 | 11,9 | 84,2 | 0,0 |
+| GC-D, nhóm theo quần thể | 1,55 | 56,9 | 28,1 | 82,2 | 0,0 |
+| *Hiệu chỉnh lô, k = 5 quả mỗi quần thể* | | | | | |
+| Bước 2 gốc (PLS chỉ khớp trên Cal) + dịch tâm | 1,26 | 84,9 (3,9) | 53,1 (6,0) | 95,1 (1,7) | 4,9 (1,7) |
+| Kiểu Bước 2 (Tuning) + dịch tâm | 1,26 | 83,8 (4,3) | 52,8 (6,2) | 95,4 (1,7) | 4,6 (1,7) |
+| GC-D-BC, nhóm theo mùa | 1,38 | 86,6 (3,8) | 50,0 (6,5) | 95,9 (1,6) | 4,1 (1,6) |
+| GC-D-BC, nhóm theo quần thể | 1,21 | 82,5 (4,7) | 53,9 (6,4) | 95,0 (1,8) | 5,0 (1,8) |
+| GC-D dịch tâm, nhóm theo mùa | 2,10 | 95,2 (1,5) | 33,2 (6,1) | 98,6 (1,5) | 1,4 (1,5) |
+| GC-D dịch tâm, nhóm theo quần thể | 1,55 | 89,7 (2,8) | 45,3 (6,3) | 97,0 (1,6) | 3,0 (1,6) |
+
+  **Mùa vụ 4:**
+
+| Cách hiệu chỉnh khoảng | Nửa độ rộng TB (%FW) | Độ phủ 90% | Tự quyết | Đúng / quả tự quyết | Báo "đủ chín" sai / quả tự quyết |
+|---|---|---|---|---|---|
+| *Không hiệu chỉnh lô* | | | | | |
+| Bước 2 gốc (PLS chỉ khớp trên Cal) | 1,26 | 76,4 | 71,9 | 99,6 | 0,2 |
+| Kiểu Bước 2 (Tuning) | 1,26 | 78,3 | 72,1 | 99,4 | 0,4 |
+| GC-D, nhóm theo mùa | 1,81 | 91,7 | 57,8 | 100,0 | 0,0 |
+| GC-D, nhóm theo quần thể | 1,47 | 84,3 | 67,2 | 99,4 | 0,4 |
+| *Hiệu chỉnh lô, k = 5 quả mỗi quần thể* | | | | | |
+| Bước 2 gốc (PLS chỉ khớp trên Cal) + dịch tâm | 1,26 | 91,3 (1,5) | 71,1 (2,0) | 99,7 (0,2) | 0,2 (0,2) |
+| Kiểu Bước 2 (Tuning) + dịch tâm | 1,26 | 91,1 (1,6) | 71,4 (2,0) | 99,7 (0,3) | 0,2 (0,2) |
+| GC-D-BC, nhóm theo mùa | 1,23 | 90,3 (1,5) | 72,0 (2,1) | 99,6 (0,3) | 0,3 (0,2) |
+| GC-D-BC, nhóm theo quần thể | 1,14 | 88,5 (1,7) | 74,3 (2,1) | 99,5 (0,3) | 0,3 (0,2) |
+| GC-D dịch tâm, nhóm theo mùa | 1,81 | 97,2 (0,7) | 58,0 (1,7) | 99,9 (0,1) | 0,1 (0,1) |
+| GC-D dịch tâm, nhóm theo quần thể | 1,47 | 94,9 (1,1) | 66,2 (2,3) | 99,8 (0,2) | 0,2 (0,2) |
+
+  Nhận xét:
+  - **Ảnh hưởng của mô hình dự đoán:** cùng q, chỉ đổi mô hình từ "khớp trên Cal" sang "khớp trên Cal + Tuning" đã nâng độ phủ mùa vụ 5 khi không hiệu chỉnh lô (dòng 1 so với dòng 2). Vì vậy, so sánh GC-D ở nhánh `selected` với Bước 2 gốc trộn lẫn ảnh hưởng của mô hình và của cách hiệu chỉnh khoảng; nhánh `A=11` tách được hai ảnh hưởng này.
+  - **Cùng mô hình, không hiệu chỉnh lô:** GC-D nới rộng khoảng, nên độ phủ cao hơn nhưng tỉ lệ tự quyết thấp hơn, ở cả hai mùa vụ. Ở mùa vụ 5, không phương pháp nào đạt độ phủ 90%.
+  - **Cùng mô hình, có hiệu chỉnh lô (k = 5):**
+    - Với nhóm theo mùa (phân tích chính), "kiểu Bước 2 + dịch tâm" và GC-D-BC cho kết quả nằm trong khoảng một độ lệch chuẩn của nhau ở cả hai mùa vụ.
+    - Với nhóm theo quần thể, kết quả tương tự ở mùa vụ 5. Ở mùa vụ 4, GC-D-BC phủ thấp hơn (88,5% so với 91,1%) và tự quyết nhiều hơn (74,3% so với 71,4%); các chênh lệch này lớn hơn một độ lệch chuẩn.
+    - GC-D dịch tâm phủ thừa và tự quyết ít hơn. Điều này phù hợp với bài *Talanta*: dịch tâm trên khoảng GC-D làm phủ thừa, còn GC-D-BC giữ gần mức danh nghĩa.
+  - **Hệ quả:** GC-D đánh đổi tỉ lệ tự quyết để lấy độ phủ. Phương pháp nào tốt hơn phụ thuộc vào chi phí của một quả bị hoãn (đo phá mẫu) so với chi phí báo nhầm, tức mô-đun M4. Khi đã có vài quả đo phá mẫu cho mỗi lô, cách làm đơn giản của Bước 2 cho kết quả tương đương GC-D-BC nhóm theo mùa.
+  - Số liệu của nhánh `selected`, của T = 14 và 16 %FW, và của k = 10 nằm trong `results/summary.json`.
+- **Bước 4a: giải thích quyết định với PLS (26/11/2026).** Mô-đun `src/explain.py`, script `src/step4_explain.py`. Kết quả trong `results/step4_explanations.csv` (mỗi quả một dòng: quyết định, khoảng cách đến ngưỡng, nửa độ rộng khoảng và phần do T²/Q, cờ phổ bất thường, đóng góp của 10 dải, câu giải thích tiếng Việt), `results/step4_faithfulness.csv`, `results/step4.json` và mục `step4` của `summary.json`.
+  - **Thiết kế (cố định trước khi chạy):**
+    - Tầng chính: GC-D nhóm theo mùa trên mô hình chung PLS 11 thành phần (Cal + Tuning). Tầng phụ: Bước 2 (độ rộng cố định). Không hiệu chỉnh lô. T = 15 %FW.
+    - 10 dải liền nhau cố định trên 684–990 nm; không gán ý nghĩa hóa học cho dải nào.
+    - Kiểm tra xóa: xóa m dải có |đóng góp| lớn nhất của mỗi quả, so với m dải ngẫu nhiên (100 lần rút). Đo tỉ lệ quả bị đổi quyết định. Hai cách xóa: thay bằng trung bình huấn luyện (kiểm tra code; với PLS kết quả biết trước) và nội suy tuyến tính phổ thô qua dải rồi tiền xử lý lại (phép kiểm tra chính).
+    - Độ ổn định: so lời giải thích giữa các lần quét của cùng một quả với cặp quả khác cùng quần thể.
+
+  **Quyết định và cờ phổ bất thường ở T = 15:**
+
+| Tầng quyết định | Tập | Đủ chín (%) | Chưa chín (%) | Chưa quyết (%) | Cờ Q / cờ T² (%) |
+|---|---|---|---|---|---|
+| GC-D nhóm theo mùa (chính) | mùa vụ 4 | 53,2 | 4,6 | 42,2 | 0,0 / 0,0 |
+| GC-D nhóm theo mùa (chính) | mùa vụ 5 | 6,2 | 5,6 | 88,1 | 0,0 / 0,0 |
+| Bước 2 (phụ) | mùa vụ 4 | 60,4 | 11,4 | 28,1 | 0,0 / 0,0 |
+| Bước 2 (phụ) | mùa vụ 5 | 11,9 | 35,0 | 53,1 | 0,0 / 0,0 |
+
+  **Kiểm tra xóa, T = 15** (mỗi ô: % quả đổi quyết định khi xóa m dải xếp hạng cao nhất / khi xóa m dải ngẫu nhiên; p = tỉ lệ lần rút ngẫu nhiên đạt ít nhất bằng):
+
+| Tầng quyết định | Tập | Cách xóa | m = 1 | m = 2 | m = 3 |
+|---|---|---|---|---|---|
+| GC-D nhóm theo mùa (chính) | mùa vụ 4 | trung bình (kiểm tra code) | 63,4 / 26,2 (p = 0,00) | 59,9 / 37,9 (p = 0,00) | 53,1 / 43,4 (p = 0,19) |
+| GC-D nhóm theo mùa (chính) | mùa vụ 4 | nội suy (kiểm tra chính) | 38,5 / 43,2 (p = 0,60) | 48,4 / 59,7 (p = 0,65) | 55,7 / 62,6 (p = 0,53) |
+| GC-D nhóm theo mùa (chính) | mùa vụ 5 | trung bình (kiểm tra code) | 42,5 / 14,1 (p = 0,06) | 16,9 / 20,0 (p = 0,29) | 13,8 / 23,2 (p = 0,55) |
+| GC-D nhóm theo mùa (chính) | mùa vụ 5 | nội suy (kiểm tra chính) | 76,9 / 40,7 (p = 0,36) | 96,9 / 54,9 (p = 0,00) | 90,0 / 64,2 (p = 0,55) |
+| Bước 2 (phụ) | mùa vụ 4 | trung bình (kiểm tra code) | 90,1 / 28,1 (p = 0,00) | 51,3 / 39,8 (p = 0,26) | 62,3 / 45,9 (p = 0,26) |
+| Bước 2 (phụ) | mùa vụ 4 | nội suy (kiểm tra chính) | 32,3 / 37,7 (p = 0,58) | 40,1 / 52,5 (p = 0,47) | 50,6 / 58,3 (p = 0,49) |
+| Bước 2 (phụ) | mùa vụ 5 | trung bình (kiểm tra code) | 88,8 / 40,8 (p = 0,00) | 56,2 / 57,2 (p = 0,53) | 85,0 / 60,4 (p = 0,25) |
+| Bước 2 (phụ) | mùa vụ 5 | nội suy (kiểm tra chính) | 83,8 / 57,6 (p = 0,33) | 88,8 / 65,6 (p = 0,00) | 87,5 / 68,5 (p = 0,32) |
+
+  Ghi chú khi viết bài: p ở đây bằng số lần rút đạt ít nhất bằng chia cho 100, nên có thể bằng 0. Dạng chuẩn của phép hoán vị là (1 + số lần)/(1 + 100), nhỏ nhất 1/101; quy đổi từ số đã lưu bằng (1 + 100p)/101 (cũng đúng với trung bình qua các seed). Bước 4b tính p theo cùng cách để nhất quán.
+
+  **Độ ổn định** (trung vị Spearman của đóng góp theo dải; trung bình Jaccard của 3 dải có |đóng góp| lớn nhất):
+
+| Tầng quyết định | Tập | Số cặp cùng quả | Spearman: cùng quả / quả khác | Trùng 3 dải đầu (Jaccard): cùng quả / quả khác |
+|---|---|---|---|---|
+| GC-D nhóm theo mùa (chính) | mùa vụ 4 | 723 | 1,00 / 0,88 | 0,97 / 0,59 |
+| GC-D nhóm theo mùa (chính) | mùa vụ 5 | 160 | 0,98 / 0,82 | 0,82 / 0,56 |
+| Bước 2 (phụ) | mùa vụ 4 | 723 | 1,00 / 0,82 | 0,96 / 0,57 |
+| Bước 2 (phụ) | mùa vụ 5 | 160 | 0,99 / 0,87 | 0,86 / 0,61 |
+
+  **Phân tích cơ chế** (làm **sau** khi thấy kết quả đã đăng ký trước; mục `post_hoc_interp_mechanism`). Tầng chính, mùa vụ 4, xóa từng dải bằng nội suy:
+
+| Dải | Thay đổi dự đoán TB (%FW) | Độ lệch chuẩn giữa các quả | Đóng góp TB theo lời giải thích, giá trị tuyệt đối |
+|---|---|---|---|
+| 684-711 nm | −1,77 | 1,00 | 1,20 |
+| 714-741 nm | 4,43 | 3,70 | 4,07 |
+| 744-771 nm | −0,75 | 1,83 | 2,57 |
+| 774-801 nm | 0,03 | 0,13 | 0,50 |
+| 804-831 nm | 0,32 | 0,02 | 0,13 |
+| 834-861 nm | −1,77 | 0,13 | 0,79 |
+| 864-891 nm | −6,56 | 0,55 | 1,18 |
+| 894-921 nm | 18,00 | 2,11 | 3,04 |
+| 924-951 nm | −13,32 | 2,10 | 1,34 |
+| 954-990 nm | 0,86 | 0,19 | 2,70 |
+
+  Xóa một dải bằng nội suy làm đạo hàm bậc 2 trong dải về gần 0, nên mô hình nhận một phổ ngoài miền dữ liệu. Dự đoán thay đổi mạnh và gần như giống nhau cho mọi quả (độ lệch chuẩn nhỏ so với trung bình), vượt xa đóng góp riêng của từng quả. Chỉ 28,1% số quả có dải đóng góp lớn nhất trùng với dải làm dự đoán đổi nhiều nhất (ngẫu nhiên là 10%). Vì vậy phép kiểm tra chính theo thiết kế ban đầu không đo được độ trung thực của lời giải thích.
+
+  **Định vị lại (người dùng đồng ý ngày 26/11/2026):**
+  - Với PLS, lời giải thích là **phép phân tách chính xác** của mô hình: dự đoán = trung bình huấn luyện + tổng đóng góp các dải; log σ = phần của quả điển hình + phần do T² + phần do Q. Vì vậy, xét so với mốc trung bình, lời giải thích trung thực theo cấu tạo.
+    - Kiểm tra xóa bằng trung bình xác nhận code đúng: dự đoán thay đổi đúng bằng tổng đóng góp của các dải bị xóa (test `test_contributions_sum_to_prediction_and_mean_deletion_is_exact`), và ở m = 1 dải xếp hạng cao nhất làm đổi quyết định nhiều hơn dải ngẫu nhiên (p ≤ 0,06). Ở tầng chính, độ rộng khoảng cũng đổi theo T² và Q của phổ đã xóa, nên kết quả ở mức quyết định không hoàn toàn biết trước.
+    - Với m ≥ 2, dải xếp hạng cao không còn luôn hơn dải ngẫu nhiên: khi xóa cùng lúc, các dải có đóng góp trái dấu bù trừ nhau. Xếp hạng theo |đóng góp| không phải xếp hạng theo ảnh hưởng lên quyết định.
+  - Điểm được kiểm chứng của PLS là **độ ổn định**: lời giải thích giữa các lần quét của cùng một quả gần như trùng nhau, và giống nhau hơn rõ so với giữa các quả khác.
+  - **Cờ phổ bất thường không bật cho quả nào**, kể cả ở mùa vụ 5: Q và T² ở mức quả không phát hiện được kiểu lệch mùa vụ này.
+  - Phần kiểm chứng độ trung thực chuyển sang **CNN (Bước 4b, Colab)**, nơi lời giải thích (Integrated Gradients, gradient × đầu vào) chỉ là xấp xỉ của một mô hình phi tuyến nên phép kiểm tra không còn là vòng tròn.
+- **Bước 4b: giải thích quyết định của CNN và kiểm chứng độ trung thực, chưa có kết quả.** Code và notebook sẵn sàng (26/11/2026): `src/explain_nn.py`, `src/step4b_explain_cnn.py`, `notebooks/colab_explain_cnn.ipynb`. Thiết kế (cố định trước khi chạy, chi tiết ở đầu `src/step4b_explain_cnn.py`):
+  - **Mô hình:** `cnn_AT_calonly` của Bước 3, 5 seed. Bước 3 không lưu trọng số, nên mô hình được huấn luyện lại bằng cùng code và seed, rồi so với dự đoán đã lưu của Bước 3.
+  - **Tầng quyết định:** như Bước 3 (khoảng conformal từ tập Tuning), T = 15 %FW.
+  - **Lời giải thích:** Integrated Gradients (64 bước, mốc là trung bình huấn luyện) và gradient × đầu vào. Gộp theo 10 dải của Bước 4a, mỗi dải gồm cả 6 khối tiền xử lý. Sai số của tính chất đầy đủ được báo theo phổ, cả dạng tuyệt đối (%FW) lẫn tương đối, vì dạng tương đối bị chi phối bởi các phổ có dự đoán sát mốc.
+  - **Kiểm chứng độ trung thực:** xóa m dải xếp hạng cao nhất (về mốc) so với m dải ngẫu nhiên (100 lần rút). Với CNN, phép này không vòng tròn vì mô hình phi tuyến.
+  - **Độ ổn định:** như Bước 4a.
+  - **Biện pháp an toàn khi chạy trên Colab (27/11/2026):**
+    - Chỉ huấn luyện khi phiên có GPU, như Bước 3 (lần chạy thử được chạy trên CPU). Môi trường (Python, TensorFlow, Keras, GPU, commit) được ghi vào metadata của từng mô hình và vào kết quả.
+    - Sau mỗi seed, dự đoán được so với dự đoán đã lưu của Bước 3 trên cả 12.011 phổ. Nếu lệch quá 1e-4 %FW, script dừng trước khi phân tích seed đó (mã 4) và giữ lại mô hình đã lưu. Chỉ chạy tiếp bằng `--accept-step3-mismatch` (trong notebook: `ACCEPT_STEP3_MISMATCH = True`) sau khi đã thống nhất; lựa chọn này được ghi vào kết quả.
+    - Mô hình được lưu dưới tên tạm, ghi metadata rồi mới đổi sang tên chính thức, nên file mô hình mang tên chính thức luôn đầy đủ. File tạm còn sót sau khi bị ngắt được xóa khi chạy lại.
+    - Không bắt đầu seed mới sau 4 giờ (mã 3); chạy lại sẽ dùng các mô hình đã lưu.
+
+  Sau khi chạy notebook: giải nén `step4b_results.zip` vào thư mục gốc repo, rồi chạy `.venv/Scripts/python -m src.step4b_explain_cnn --summary-only` để ghi mục `step4b` vào `results/summary.json`. Lệnh này in kết quả so sánh với Bước 3 và từ chối kết quả của lần chạy thử.
+- Bước tiếp theo: chạy notebook Bước 4b trên Colab; sau đó mô-đun chi phí M4 (cần giá trị chi phí có nguồn trích dẫn).
 
 ## Cách chạy
 
@@ -174,10 +305,16 @@ Sau đó chạy bằng Python của venv:
 | `src/uncertainty.py` | M3: khoảng conformal, hiệu chỉnh độ lệch theo lô, điểm bất thường phổ (Q-residual, Hotelling T²) |
 | `src/decision.py` | M4: quyết định đủ chín / chưa chín / chưa quyết và các chỉ số ở mức quyết định |
 | `src/step1_baseline.py`, `src/step2_decision.py` | Chạy Bước 1, Bước 2 và ghi kết quả |
+| `src/step2_gcd_baseline.py` | Bước 2b: tầng quyết định với GC-D và GC-D-BC làm đối chứng (hiệu chỉnh theo quả, cùng các lần rút k quả như Bước 2) |
+| `src/explain.py` | M5: lời giải thích cho từng quyết định (khoảng cách đến ngưỡng, độ rộng khoảng và phần do T²/Q, cờ phổ bất thường, đóng góp theo 10 dải), kiểm tra xóa và độ ổn định |
+| `src/step4_explain.py` | Bước 4a: giải thích quyết định với PLS và kiểm chứng |
+| `src/explain_nn.py` | Integrated Gradients và gradient × đầu vào (viết theo hàm gradient tổng quát; nối với Keras trên Colab) |
+| `src/step4b_explain_cnn.py` | Bước 4b: huấn luyện lại `cnn_AT_calonly`, giải thích quyết định của CNN và kiểm chứng (Colab); `--summary-only` ghi kết quả vào `summary.json` trên máy |
 | `src/step3_train_nn.py`, `src/step3_analysis.py` | Bước 3: huấn luyện ANN/CNN (Colab), phân tích dự đoán (Colab hoặc máy cục bộ) |
-| `tests/` | Test cho dữ liệu, tiền xử lý, mô hình, các mô-đun M3 và M4, các mốc của Bước 1, Bước 2, và phần không cần TensorFlow của Bước 3 |
-| `results/` | Kết quả: `summary.json` (số liệu tổng hợp), `step1_*`, `step2_*`, `step3*` |
+| `tests/` | Test cho dữ liệu, tiền xử lý, mô hình, các mô-đun M3 và M4, các mốc của Bước 1 và Bước 2, phần không cần TensorFlow của Bước 3 (`test_step3.py`), GC-D và Bước 2b (`test_group_conformal.py`, `test_step2_gcd.py`), Bước 4a (`test_explain.py`), phần không cần TensorFlow của Bước 4b (`test_step4b.py`) |
+| `results/` | Kết quả: `summary.json` (số liệu tổng hợp), `step1_*`, `step2_*` (gồm `step2_gcd*` của Bước 2b), `step3*`, `step4*` (Bước 4a; Bước 4b thêm `step4b*` sau khi chạy trên Colab), `gcd_verification*.json` (kiểm tra GC-D trên file v4) |
 | `notebooks/colab_cnn.ipynb` | Notebook Colab cho Bước 3 |
+| `notebooks/colab_explain_cnn.ipynb` | Notebook Colab cho Bước 4b (kết quả ở `MyDrive/Mango_NIR/step4b_results/`) |
 
 ## Dữ liệu
 
