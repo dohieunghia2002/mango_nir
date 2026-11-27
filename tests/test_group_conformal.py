@@ -203,3 +203,60 @@ def test_gcd_matches_independent_reference():
     _, lo2, hi2 = gc.interval(Xt)
     np.testing.assert_allclose(lo2, lo, rtol=1e-7, atol=1e-9)
     np.testing.assert_allclose(hi2, hi, rtol=1e-7, atol=1e-9)
+
+
+def test_unit_level_equals_spectrum_level_with_one_spectrum_per_unit():
+    (X, y, g, u), (Xt, _, _, _) = split_groups(*make_grouped(np.random.default_rng(8), n_groups=8, bias_sd=0.5), 6)
+    spec = GroupConformal(alpha=0.1, a_max=6).fit(X, y, g, u)
+    unit = GroupConformal(alpha=0.1, a_max=6, level='unit').fit(X, y, g, u)
+    assert unit.qhat == pytest.approx(spec.qhat, rel=1e-10)
+    yhat, lo, _ = spec.interval(Xt)
+    ids, centre, half = unit.interval_units(Xt, np.arange(len(Xt)))
+    np.testing.assert_allclose(centre, yhat)
+    np.testing.assert_allclose(centre - half, lo)
+
+
+def test_unit_level_calibration_matches_hand_computation():
+    X, y, g, _ = make_grouped(np.random.default_rng(9), n_groups=6, per_group=60, bias_sd=0.5)
+    u = np.arange(len(y)) // 3                  # three spectra per unit (same y within a unit)
+    y = np.repeat(y[::3], 3)
+    keep = ~((g == 2) & (np.arange(len(y)) >= 150))   # unequal numbers of units per group
+    X, y, g, u = X[keep], y[keep], g[keep], u[keep]
+    gc = GroupConformal(alpha=0.1, a_max=6, level='unit').fit(X, y, g, u)
+    # unit rows by hand from the spectrum-level out-of-group quantities
+    ids = np.unique(u)
+    r = np.array([gc.resid[u == i].mean() for i in ids])
+    t2 = np.array([gc.t2_cal[u == i].mean() for i in ids])
+    q = np.array([gc.q_cal[u == i].mean() for i in ids])
+    grp = np.array([g[u == i][0] for i in ids])
+    np.testing.assert_allclose(r, gc.u_resid)
+    feats = np.column_stack([np.log1p(t2), np.log(q / gc.q_med)])
+    beta = irls_poisson(feats, np.abs(r))
+    sig = np.exp(beta[0] + feats @ beta[1:])
+    sig = np.maximum(sig, 0.1 * np.median(sig))
+    w = np.array([1.0 / (len(np.unique(grp)) * np.sum(grp == k)) for k in grp])
+    s = np.abs(r) / sig
+    qhat = next(t for t in np.sort(s) if w[s <= t].sum() >= 0.9 - 1e-12)
+    assert gc.qhat == pytest.approx(qhat, rel=1e-8)
+    # unit interval: centre is the mean prediction of the unit's spectra
+    _, centre, _ = gc.interval_units(X[:9], u[:9])
+    np.testing.assert_allclose(centre, gc.final.predict(X[:9], gc.A).reshape(3, 3).mean(axis=1))
+
+
+def test_unit_values_must_be_constant_within_units():
+    X, y, g, _ = make_grouped(np.random.default_rng(10), n_groups=4, per_group=20)
+    u = np.arange(len(y)) // 2
+    with pytest.raises(ValueError):          # y differs between the two spectra of a unit
+        GroupConformal(alpha=0.1, a_max=4, level='unit').fit(X, y, g, u)
+
+
+def test_bias_correction_with_correction_groups():
+    X, y, g, _ = make_grouped(np.random.default_rng(11), n_groups=6, per_group=80, bias_sd=0.5)
+    u = np.arange(len(y)) // 2
+    y = np.repeat(y[::2], 2)
+    pop = g * 10 + (np.arange(len(y)) % 80) // 40   # two populations of 20 units within each group
+    default = GroupConformalBC(k=3, n_draws=5, alpha=0.1, a_max=6).fit(X, y, g, u)
+    explicit = GroupConformalBC(k=3, n_draws=5, alpha=0.1, a_max=6).fit(X, y, g, u, correction_groups=g)
+    assert explicit.qhat == default.qhat                  # default correction groups = calibration groups
+    unit_pop = GroupConformalBC(k=3, n_draws=5, alpha=0.1, a_max=6, level='unit').fit(X, y, g, u, correction_groups=pop)
+    assert np.isfinite(unit_pop.qhat) and unit_pop.qhat != default.qhat

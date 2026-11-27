@@ -156,11 +156,21 @@ class ScaleModel:
 class GroupConformal:
     """GC-D (scale='diag', weights='group') and the ablation cells of Fig. 5: weights 'uniform' (U) or 'group' (W),
     scores 'abs' (A) or 'diag' (D); calibration folds are always out-of-group here (G).
-    fit(...) then interval(X) -> (yhat, lo, hi)."""
+    fit(...) then interval(X) -> (yhat, lo, hi).
 
-    def __init__(self, alpha=0.1, a_max=A_MAX, n_components=None, scale='diag', weights='group', n_folds=None, seed=0):
+    level='unit' is this project's adaptation for decisions per fruit (not in the article): the out-of-group residuals,
+    T2 and Q of the spectra are averaged per unit (y is constant within a unit, so the unit residual is y minus the mean
+    out-of-group prediction), and sigma and q are fitted on units with weights 1 / (K x units in the group).
+    ASSUMPTION: unit diagnostics are the means of the spectrum diagnostics. The number of latent variables is still
+    selected on spectra, as in the article. New units: interval_units(X, units)."""
+
+    def __init__(self, alpha=0.1, a_max=A_MAX, n_components=None, scale='diag', weights='group', n_folds=None, seed=0,
+                 level='spectrum'):
         self.alpha, self.a_max, self.n_components = alpha, a_max, n_components
         self.scale, self.weights, self.n_folds, self.seed = scale, weights, n_folds, seed
+        if level not in ('spectrum', 'unit'):
+            raise ValueError(f'level must be spectrum or unit, not {level}')
+        self.level = level
 
     def fit(self, X, y, groups, units=None):
         X = np.asarray(X, dtype=float)
@@ -182,8 +192,33 @@ class GroupConformal:
             self.q_cal[idx] = m.q(X[idx], A)
         self.q_med = float(np.median(self.final.q(X, A)))
         self.groups, self.units = groups, units
-        self._calibrate(np.abs(self.resid), self.t2_cal, self.q_cal, groups)
+        if self.level == 'unit':
+            if units is None:
+                raise ValueError("level='unit' needs units")
+            self._unit_rows(y)
+            self._calibrate(np.abs(self.u_resid), self.u_t2, self.u_q, self.u_groups)
+        else:
+            self._calibrate(np.abs(self.resid), self.t2_cal, self.q_cal, groups)
         return self
+
+    def unit_values(self, values):
+        """Per-unit value of a per-spectrum array that must be constant within each unit (in u_ids order)."""
+        values = np.asarray(values)
+        ids, first, inv = np.unique(self.units, return_index=True, return_inverse=True)
+        out = values[first]
+        if np.any(out[inv] != values):
+            raise ValueError('values differ between spectra of one unit')
+        return out
+
+    def _unit_rows(self, y):
+        """Unit-level calibration rows: mean out-of-group residual, T2 and Q of each unit's spectra."""
+        self.u_ids, inv, n = np.unique(self.units, return_inverse=True, return_counts=True)
+        unit_mean = lambda v: np.bincount(inv, weights=v) / n
+        self.unit_values(y)                      # y must be constant within a unit
+        self.u_groups = self.unit_values(self.groups)   # a unit belongs to one calibration group
+        self.u_resid = unit_mean(self.resid)
+        self.u_t2 = unit_mean(self.t2_cal)
+        self.u_q = unit_mean(self.q_cal)
 
     def _calibrate(self, abs_resid, t2, q, groups):
         w = group_weights(groups) if self.weights == 'group' else np.full(len(abs_resid), 1.0 / len(abs_resid))
@@ -207,36 +242,58 @@ class GroupConformal:
         half = self.qhat * self.sigma(X)
         return yhat, yhat - half, yhat + half
 
+    def interval_units(self, X, units):
+        """Unit-level interval (level='unit'): centre = mean prediction of the unit's spectra, sigma from the means of
+        their T2 and Q. Returns (unit ids, centre, half-width); the centre can then be shifted by a bias correction."""
+        if self.level != 'unit':
+            raise ValueError("interval_units needs level='unit'")
+        ids, inv, n = np.unique(np.asarray(units), return_inverse=True, return_counts=True)
+        unit_mean = lambda v: np.bincount(inv, weights=v) / n
+        yhat = unit_mean(self.final.predict(X, self.A))
+        if self.scale_model is None:
+            sigma = np.ones(len(ids))
+        else:
+            sigma = self.scale_model(unit_mean(self.final.t2(X, self.A)), unit_mean(self.final.q(X, self.A)))
+        return ids, yhat, self.qhat * sigma
+
 
 class GroupConformalBC(GroupConformal):
     """GC-D-BC (Section 4.8, Table S22): the test-time correction (centre shifted by the mean residual of k labelled
     units of the new group) is mimicked in every calibration group before sigma and q are fitted.
-    ASSUMPTIONS: the bias estimate is the mean residual over all spectra of the k drawn units; the corrected residuals of
-    the remaining units are pooled over n_draws random draws per group; group-balanced weights are computed on the
-    pooled rows, so every group still carries 1/K; the scale model is fitted on the pooled rows (unweighted)."""
+    ASSUMPTIONS: the bias estimate is the mean residual over all spectra of the k drawn units (level='spectrum') or the
+    mean of their unit residuals (level='unit'); the corrected residuals of the remaining rows are pooled over n_draws
+    random draws per correction group; group-balanced weights over the calibration groups are computed on the pooled
+    rows, so every calibration group still carries 1/K; the scale model is fitted on the pooled rows (unweighted).
+    correction_groups: the groups within which k units are drawn (default: the calibration groups, as in the article;
+    this project corrects per population within a new season, so it passes populations)."""
 
     def __init__(self, k, n_draws=20, **kw):
         super().__init__(**kw)
         self.k, self.n_draws = k, n_draws
 
-    def fit(self, X, y, groups, units):
+    def fit(self, X, y, groups, units, correction_groups=None):
         super().fit(X, y, groups, units)   # calibrates plain GC-D first, then recalibrates on corrected residuals
+        corr = np.asarray(groups if correction_groups is None else correction_groups)
+        if self.level == 'unit':
+            row_unit, row_group, row_corr = self.u_ids, self.u_groups, self.unit_values(corr)
+            resid, t2, q = self.u_resid, self.u_t2, self.u_q
+        else:
+            row_unit, row_group, row_corr = self.units, self.groups, corr
+            resid, t2, q = self.resid, self.t2_cal, self.q_cal
         rng = np.random.default_rng(self.seed)
-        rows, resid, grp = [], [], []
-        for g in np.unique(self.groups):
-            in_g = np.flatnonzero(self.groups == g)
-            g_units = np.unique(self.units[in_g])
-            if len(g_units) <= self.k:
+        rows, corrected = [], []
+        for c in np.unique(row_corr):
+            in_c = np.flatnonzero(row_corr == c)
+            c_units = np.unique(row_unit[in_c])
+            if len(c_units) <= self.k:
                 continue
             for _ in range(self.n_draws):
-                ref = np.isin(self.units[in_g], rng.choice(g_units, self.k, replace=False))
-                bias = self.resid[in_g[ref]].mean()
-                rest = in_g[~ref]
+                ref = np.isin(row_unit[in_c], rng.choice(c_units, self.k, replace=False))
+                rest = in_c[~ref]
                 rows.append(rest)
-                resid.append(self.resid[rest] - bias)
-                grp.append(np.full(len(rest), g))
+                corrected.append(resid[rest] - resid[in_c[ref]].mean())
         rows = np.concatenate(rows)
-        self._calibrate(np.abs(np.concatenate(resid)), self.t2_cal[rows], self.q_cal[rows], np.concatenate(grp))
+        self._calibrate(np.abs(np.concatenate(corrected)), t2[rows], q[rows], row_group[rows])
         return self
 
 
